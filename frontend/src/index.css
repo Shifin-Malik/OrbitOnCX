@@ -1,0 +1,54 @@
+@import "tailwindcss";
+@plugin "tailwind-scrollbar-hide";
+
+/* Hide scrollbar but keep scroll */
+body {
+  @apply scrollbar-hide;
+  background-color: #f8fafc;
+  color: #1e293b;
+  overflow-y: scroll;
+}
+
+body::-webkit-scrollbar {
+  display: none;
+}
+
+@theme {
+  --color-primary: #059669;
+  --color-primary-dark: #065f46;
+  --color-secondary: #ecfdf5;
+
+  --color-background: #f8fafc;
+  --color-background-soft: #ffffff;
+  --color-background-elevated: #f1f5f9;
+
+  --color-accent: #10b981;
+  --color-accent-glow: rgba(16, 185, 129, 0.05);
+
+  --text-color-primary: #064e3b;
+  --text-color-secondary: #374151;
+  --text-color-muted: #9ca3af;
+
+  --border-color-primary: #e5e7eb;
+  --border-color-secondary: #f3f4f6;
+}
+
+.dark {
+  --color-primary: #10b981;
+  --color-primary-dark: #059669;
+  --color-secondary: #022c22;
+
+  --color-background: #010404;
+  --color-background-soft: #060d0d;
+  --color-background-elevated: #0d1a1a;
+
+  --color-accent: #34d399;
+  --color-accent-glow: rgba(52, 211, 153, 0.15);
+
+  --text-color-primary: #ecfdf5;
+  --text-color-secondary: #94a3b8;
+  --text-color-muted: #3f6259;
+
+  --border-color-primary: #132a26;
+  --border-color-secondary: #060d0d;
+}
