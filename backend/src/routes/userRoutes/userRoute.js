@@ -20,6 +20,7 @@ import {
 import { protect } from "../../middlewares/authMiddleware.js";
 
 import uploadAvatar from "../../middlewares/uploadAvatar.js";
+import { executeCode } from "../../controllers/userController/compilerController.js";
 
 const router = express.Router();
 
@@ -42,5 +43,7 @@ router.get("/profile", protect, getProfile);
 router.put("/profile", protect, uploadAvatar.single("avatar"), updateProfile);
 
 router.post("/google", googleAuth);
+
+router.post("/execute", executeCode);
 
 export default router;

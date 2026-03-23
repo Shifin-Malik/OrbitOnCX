@@ -1,7 +1,8 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import * as authAPI from "./authAPI";
-
-
+import * as authAPI from "../api.js";
+import { persistReducer } from "redux-persist";
+import { CookieStorage } from "redux-persist-cookie-storage";
+import Cookies from "js-cookie";
 
 const initialState = {
   user: null,
@@ -11,7 +12,7 @@ const initialState = {
   message: "",
 };
 
-
+// --- Async Thunks ---
 
 export const register = createAsyncThunk(
   "auth/register",
@@ -118,7 +119,6 @@ export const updateProfile = createAsyncThunk(
   },
 );
 
-
 export const googleLoginAction = createAsyncThunk(
   "auth/googleLogin",
   async (accessToken, thunkAPI) => {
@@ -133,7 +133,7 @@ export const googleLoginAction = createAsyncThunk(
   },
 );
 
-
+// --- Slice Configuration ---
 
 const authSlice = createSlice({
   name: "auth",
@@ -148,14 +148,13 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      
+      // Register
       .addCase(register.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.isSuccess = true;
-        state.message = payload?.message;
+        state.message = payload?.message || "Registration successful";
       })
-
-      
+      // Verify Email
       .addCase(verifyEmail.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.isSuccess = true;
@@ -163,56 +162,58 @@ const authSlice = createSlice({
         state.message = payload?.message;
         localStorage.setItem("isLoggedIn", "true");
       })
-
+      // Login
       .addCase(login.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.isSuccess = true;
         state.user = payload?.user;
         state.message = payload?.message || "Authenticated successfully";
-        localStorage.setItem("isLoggedIn", "true"); 
+        localStorage.setItem("isLoggedIn", "true");
       })
-
+      // Logout
       .addCase(logout.fulfilled, (state) => {
         state.user = null;
         state.loading = false;
         state.isSuccess = false;
         state.isError = false;
         state.message = "";
-        localStorage.removeItem("isLoggedIn"); 
+        localStorage.removeItem("isLoggedIn");
       })
-
-     
+      // Get Profile
+      .addCase(getProfile.pending, (state) => {
+        state.loading = true;
+      })
       .addCase(getProfile.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.user = payload;
-        localStorage.setItem("isLoggedIn", "true"); 
+        state.isError = false;
+        localStorage.setItem("isLoggedIn", "true");
       })
       .addCase(getProfile.rejected, (state) => {
         state.loading = false;
         state.user = null;
-        localStorage.removeItem("isLoggedIn"); 
+        state.isError = false;
+        localStorage.removeItem("isLoggedIn");
       })
-
-      
+      // Update Profile
       .addCase(updateProfile.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.isSuccess = true;
         state.user = payload?.user;
         state.message = payload?.message;
       })
-
-      
+      // Google Login
       .addCase(googleLoginAction.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.isSuccess = true;
-        state.user = payload?.user; 
+        state.user = payload?.user;
         state.message = payload?.message || "Google login successful";
-
-        
         localStorage.setItem("isLoggedIn", "true");
       })
 
-     
+      // --- Matchers for Shared Logic ---
+
+      // Success Matcher for simple feedback actions
       .addMatcher(
         (action) =>
           [
@@ -225,10 +226,12 @@ const authSlice = createSlice({
           state.message = payload?.message;
         },
       )
-
-      
+      // Global Pending Matcher: "auth/" എന്ന് തുടങ്ങുന്ന ആക്ഷനുകൾക്ക് മാത്രം
       .addMatcher(
-        (action) => action.type.endsWith("/pending"),
+        (action) =>
+          action.type.startsWith("auth/") &&
+          action.type.endsWith("/pending") &&
+          !action.type.includes("getProfile"),
         (state) => {
           state.loading = true;
           state.isError = false;
@@ -236,20 +239,27 @@ const authSlice = createSlice({
           state.message = "";
         },
       )
-
-      
+      // Global Rejected Matcher: "auth/" എന്ന് തുടങ്ങുന്ന ആക്ഷനുകൾക്ക് മാത്രം
       .addMatcher(
         (action) =>
+          action.type.startsWith("auth/") &&
           action.type.endsWith("/rejected") &&
           !action.type.includes("getProfile"),
         (state, { payload }) => {
           state.loading = false;
           state.isError = true;
-          state.message = payload;
+          state.message = payload || "Something went wrong";
         },
       );
   },
 });
 
+const authPersistConfig = {
+  key: "auth",
+  storage: new CookieStorage(Cookies),
+  blacklist: ["loading", "isError", "isSuccess", "message"],
+};
+
 export const { resetAuthState } = authSlice.actions;
-export default authSlice.reducer;
+
+export default persistReducer(authPersistConfig, authSlice.reducer);

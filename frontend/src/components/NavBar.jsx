@@ -1,16 +1,15 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, memo, useCallback } from "react";
 import { HiOutlineMenu, HiX } from "react-icons/hi";
 import { NavLink, useNavigate } from "react-router-dom";
 import { IoIosHome } from "react-icons/io";
 import { FaCode, FaMoon, FaSun } from "react-icons/fa";
 import { SiLeetcode } from "react-icons/si";
 import { FaQuestionCircle } from "react-icons/fa";
-import { useSelector, useDispatch } from "react-redux";
+import { useSelector } from "react-redux";
 import Login from "../pages/Login.jsx";
 import { IoPersonCircle } from "react-icons/io5";
-import { getProfile } from "../features/auth/authSlice.js";
 
-function NavBar() {
+const NavBar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState("signup");
@@ -18,54 +17,40 @@ function NavBar() {
   const [darkMode, setDarkMode] = useState(false);
 
   const navigate = useNavigate();
-  const dispatch = useDispatch();
 
-  
-  const { user, loading } = useSelector((state) => state.auth);
+  // Selector-ൽ മാറ്റം വരുത്തി: loading ഇവിടെ വേണ്ട, user മാത്രം മതി.
+  const user = useSelector((state) => state.auth.user);
+  // Auth Loading സ്ലൈസിൽ നിന്ന് മാത്രം എടുക്കുന്നു (Login കാണിക്കാൻ മാത്രം)
+  const isAuthLoading = useSelector((state) => state.auth.loading);
 
-  
-  useEffect(() => {
-    if (user) {
-      console.log("Current User Data:", user);
-    }
-  }, [user]);
+  const defaultAvatar =
+    "https://api.dicebear.com/7.x/avataaars/svg?seed=Orbiton";
+  const [imgSrc, setImgSrc] = useState(defaultAvatar);
 
-
-  useEffect(() => {
-    const hasToken = document.cookie.includes("accessToken");
-
-   
-    if (!user && hasToken && !loading) {
-      dispatch(getProfile());
-    }
-  }, [dispatch, user, loading]);
-
- 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
     window.addEventListener("scroll", handleScroll);
     return () => window.removeEventListener("scroll", handleScroll);
   }, []);
 
-
   useEffect(() => {
-    const savedTheme = localStorage.getItem("theme");
+    const savedTheme = localStorage.getItem("theme") || "dark";
     if (savedTheme === "dark") {
       document.documentElement.classList.add("dark");
       setDarkMode(true);
     }
   }, []);
 
-  const toggleTheme = () => {
-    if (darkMode) {
-      document.documentElement.classList.remove("dark");
-      localStorage.setItem("theme", "light");
-    } else {
-      document.documentElement.classList.add("dark");
-      localStorage.setItem("theme", "dark");
-    }
-    setDarkMode(!darkMode);
-  };
+  useEffect(() => {
+    setImgSrc(user?.avatar || defaultAvatar);
+  }, [user?.avatar]);
+
+  const toggleTheme = useCallback(() => {
+    const newTheme = !darkMode ? "dark" : "light";
+    document.documentElement.classList.toggle("dark");
+    localStorage.setItem("theme", newTheme);
+    setDarkMode((prev) => !prev);
+  }, [darkMode]);
 
   const allLinks = [
     { id: 1, name: "Home", icon: IoIosHome, path: "/" },
@@ -84,10 +69,14 @@ function NavBar() {
         : "text-secondary hover:text-primary hover:bg-secondary/20"
     }`;
 
-  const openModal = (mode) => {
-    setModalMode(mode);
-    setModalOpen(true);
-    setMenuOpen(false);
+  const handleProfileClick = () => {
+    if (user) {
+      // replace: true നൽകുന്നത് സെഷൻ ഹിസ്റ്ററി ക്ലീൻ ആയി വെക്കാൻ സഹായിക്കും
+      navigate("/profile", { replace: true });
+    } else {
+      setModalMode("signin");
+      setModalOpen(true);
+    }
   };
 
   return (
@@ -99,11 +88,12 @@ function NavBar() {
             : "bg-transparent py-6"
         }`}
       >
+        {/* Logo Section */}
         <div
           className="flex items-center gap-3 cursor-pointer group"
           onClick={() => navigate("/")}
         >
-          <div className="p-2.5 bg-linear-to-br from-primary to-accent rounded-xl shadow-lg group-hover:rotate-6 transition-transform text-white">
+          <div className="p-2.5 bg-gradient-to-br from-primary to-accent rounded-xl shadow-lg group-hover:rotate-6 transition-transform text-white">
             <FaCode size={20} />
           </div>
           <span className="text-2xl font-black text-primary tracking-tighter">
@@ -111,6 +101,7 @@ function NavBar() {
           </span>
         </div>
 
+        {/* Desktop Links */}
         <div className="hidden md:flex items-center gap-1 bg-primary/5 p-1.5 rounded-2xl border border-primary/10 backdrop-blur-sm">
           {links.map((link) => (
             <NavLink key={link.id} to={link.path} className={navStyle}>
@@ -120,6 +111,7 @@ function NavBar() {
           ))}
         </div>
 
+        {/* Right Section */}
         <div className="hidden md:flex items-center gap-4">
           <button
             onClick={toggleTheme}
@@ -128,48 +120,48 @@ function NavBar() {
             {darkMode ? <FaSun size={14} /> : <FaMoon size={14} />}
           </button>
 
-          {loading ? (
+          {isAuthLoading && !user ? (
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
           ) : !user ? (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => openModal("signin")}
+                onClick={() => {
+                  setModalMode("signin");
+                  setModalOpen(true);
+                }}
                 className="px-5 py-2.5 text-[11px] font-black uppercase tracking-widest text-secondary hover:text-primary transition-colors"
               >
                 Sign In
               </button>
               <button
-                onClick={() => openModal("signup")}
-                className="px-6 py-3 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest hover:opacity-90 transition-all active:scale-95"
+                onClick={() => {
+                  setModalMode("signup");
+                  setModalOpen(true);
+                }}
+                className="px-6 py-3 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest hover:opacity-90 transition-all"
               >
                 Get Started
               </button>
             </div>
           ) : (
             <div
-              className="flex items-center gap-4 pl-4 border-l border-secondary cursor-pointer group active:scale-95 transition-transform"
-              onClick={() => navigate("/profile")}
+              className="flex items-center gap-4 pl-4 border-l border-secondary cursor-pointer group"
+              onClick={handleProfileClick}
             >
               <div className="text-right hidden lg:block">
                 <p className="text-[9px] text-primary font-black uppercase tracking-widest leading-none mb-1">
                   Developer
                 </p>
-                <p className="text-sm font-black text-primary group-hover:text-primary transition-colors">
+                <p className="text-sm font-black text-primary">
                   {user?.name?.split(" ")[0] || "User"}
                 </p>
               </div>
-              <div className="relative p-0.5 rounded-xl bg-linear-to-tr from-primary to-accent">
+              <div className="relative p-0.5 rounded-xl bg-gradient-to-tr from-primary to-accent">
                 <img
-                  src={
-                    user?.avatar ||
-                    "https://api.dicebear.com/7.x/avataaars/svg?seed=Orbiton"
-                  }
+                  src={imgSrc}
                   alt="profile"
                   className="w-9 h-9 rounded-[10px] object-cover border-2 border-white"
-                  onError={(e) => {
-                    e.target.src =
-                      "https://api.dicebear.com/7.x/avataaars/svg?seed=Orbiton";
-                  }}
+                  onError={() => setImgSrc(defaultAvatar)}
                 />
               </div>
             </div>
@@ -184,7 +176,7 @@ function NavBar() {
         </button>
       </nav>
 
-      
+      {/* Mobile Drawer */}
       {menuOpen && (
         <div className="fixed inset-0 z-[60] md:hidden">
           <div
@@ -221,6 +213,6 @@ function NavBar() {
       />
     </>
   );
-}
+};
 
-export default NavBar;
+export default memo(NavBar);
