@@ -12,7 +12,6 @@ const initialState = {
   message: "",
 };
 
-// --- Async Thunks ---
 
 export const register = createAsyncThunk(
   "auth/register",
@@ -133,7 +132,7 @@ export const googleLoginAction = createAsyncThunk(
   },
 );
 
-// --- Slice Configuration ---
+
 
 const authSlice = createSlice({
   name: "auth",
@@ -148,7 +147,7 @@ const authSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Register
+      
       .addCase(register.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.isSuccess = true;
@@ -211,9 +210,7 @@ const authSlice = createSlice({
         localStorage.setItem("isLoggedIn", "true");
       })
 
-      // --- Matchers for Shared Logic ---
-
-      // Success Matcher for simple feedback actions
+      
       .addMatcher(
         (action) =>
           [
@@ -226,7 +223,7 @@ const authSlice = createSlice({
           state.message = payload?.message;
         },
       )
-      // Global Pending Matcher: "auth/" എന്ന് തുടങ്ങുന്ന ആക്ഷനുകൾക്ക് മാത്രം
+    
       .addMatcher(
         (action) =>
           action.type.startsWith("auth/") &&
@@ -239,7 +236,7 @@ const authSlice = createSlice({
           state.message = "";
         },
       )
-      // Global Rejected Matcher: "auth/" എന്ന് തുടങ്ങുന്ന ആക്ഷനുകൾക്ക് മാത്രം
+      
       .addMatcher(
         (action) =>
           action.type.startsWith("auth/") &&

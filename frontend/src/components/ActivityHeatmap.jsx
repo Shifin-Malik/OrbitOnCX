@@ -98,10 +98,10 @@ const ActivityHeatmap = ({ userActivities }) => {
 
       <div className="heatmap-header">
         <div className="flex items-center gap-3">
-          <span className="w-1.5 h-6 bg-[var(--color-primary)] rounded-full"></span>
+          <span className="w-1.5 h-6 bg-primary rounded-full"></span>
           <h3>Activity Overview</h3>
         </div>
-        <span className="text-[11px] font-bold text-[var(--text-color-muted)] uppercase tracking-wider">
+        <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
           {values.length} submissions in the last year
         </span>
       </div>

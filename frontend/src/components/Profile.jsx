@@ -3,7 +3,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import {
   FaEdit,
-  FaCamera,
   FaSignOutAlt,
   FaLock,
   FaArrowLeft,
@@ -62,7 +61,7 @@ const InputField = ({
           onChange={onChange}
           className={`w-full ${
             compact ? "p-3" : "p-4"
-          } bg-[var(--color-background-elevated)] border-2 border-transparent focus:border-[var(--color-primary)] rounded-xl outline-none text-sm font-bold transition-all ${
+          } bg-background-elevated border-2 border-transparent focus:border-(--color-primary) rounded-xl outline-none text-sm font-bold transition-all ${
             isPasswordField ? "pr-10" : ""
           }`}
         />
@@ -70,7 +69,7 @@ const InputField = ({
           <button
             type="button"
             onClick={() => setIsVisible(!isVisible)}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-[var(--color-primary)] transition-colors"
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-zinc-500 hover:text-(--color-primary) transition-colors"
           >
             {isVisible ? <FaEyeSlash size={14} /> : <FaEye size={14} />}
           </button>
@@ -214,7 +213,7 @@ function Profile() {
   };
 
   return (
-    <div className="min-h-screen bg-[var(--color-background)] text-[var(--text-color-primary)] pt-28 pb-16 px-4 md:px-12">
+    <div className="min-h-screen bg-background text-primary pt-28 pb-16 px-4 md:px-12">
       <Toaster position="top-center" />
       <style>{`
         .scrollbar-hide::-webkit-scrollbar { display: none; }
@@ -224,23 +223,23 @@ function Profile() {
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
        
         <div className="lg:col-span-4 space-y-6">
-          <div className="bg-[var(--color-background-soft)] border border-[var(--border-color-primary)] rounded-[3rem] p-8 shadow-2xl backdrop-blur-md text-center">
-            <div className="relative group p-1.5 rounded-[3rem] bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-accent)] inline-block">
+          <div className="bg-background-soft border border-primary rounded-[3rem] p-8 shadow-2xl backdrop-blur-md text-center">
+            <div className="relative group p-1.5 rounded-[3rem] bg-linear-to-tr from-primary to-accent inline-block">
               <img
                 src={selectedAvatar || null}
                 alt="Profile"
-                className="w-40 h-40 rounded-[2.8rem] object-cover border-4 border-[var(--color-background-soft)]"
+                className="w-40 h-40 rounded-[2.8rem] object-cover border-4 border-background-soft"
               />
               <button
                 onClick={() => setShowAvatarModal(true)}
-                className="absolute bottom-2 right-2 p-3 bg-[var(--color-primary)] text-white rounded-2xl border-2 border-[var(--color-background-soft)] hover:scale-110 transition-all"
+                className="absolute bottom-2 right-2 p-3 bg-primary text-white rounded-2xl border-2 border-background-soft hover:scale-110 transition-all"
               >
-                <FaCamera size={14} />
+                <FaEdit size={14} />
               </button>
             </div>
             <h2 className="text-3xl font-black mt-6">{user?.name || "User"}</h2>
-            <div className="mt-2 px-4 py-1.5 bg-[var(--color-background-elevated)] rounded-full border border-[var(--border-color-primary)] inline-block">
-              <p className="text-[var(--color-primary)] font-bold text-[10px] uppercase tracking-widest">
+            <div className="mt-2 px-4 py-1.5 bg-background-elevated rounded-full border border-primary inline-block">
+              <p className="text-(--color-primary) font-bold text-[10px] uppercase tracking-widest">
                 {user?.bio || "Developer"}
               </p>
             </div>
@@ -254,7 +253,7 @@ function Profile() {
                   setFormStep("profile");
                   setShowEditModal(true);
                 }}
-                className="w-full py-4 rounded-2xl font-black text-xs uppercase bg-[var(--color-primary)] text-white flex items-center justify-center gap-2"
+                className="w-full py-4 rounded-2xl font-black text-xs uppercase bg-primary text-white flex items-center justify-center gap-2"
               >
                 <FaEdit /> Edit Profile
               </button>
@@ -270,9 +269,9 @@ function Profile() {
 
        
         <div className="lg:col-span-8 space-y-4">
-          <div className="bg-[var(--color-background-soft)] border border-[var(--border-color-primary)] rounded-[3rem] p-8 md:p-12 shadow-xl">
+          <div className="bg-background-soft border border-primary rounded-[3rem] p-8 md:p-12 shadow-xl">
             <h3 className="text-xl font-black flex items-center gap-3 mb-10 uppercase tracking-tighter">
-              <span className="w-1.5 h-6 bg-[var(--color-primary)] rounded-full"></span>
+              <span className="w-1.5 h-6 bg-primary rounded-full"></span>
               Performance Overview
             </h3>
             <div className="grid md:grid-cols-2 gap-12 items-center">
@@ -346,14 +345,14 @@ function Profile() {
             setFormStep("profile");
           }}
           title="Account Settings"
-          className="max-w-[340px] mx-auto overflow-hidden shadow-2xl"
+          className="max-w-85 mx-auto overflow-hidden shadow-2xl"
         >
-          <div className="flex bg-[var(--color-background-elevated)] p-1 rounded-xl mb-5 mx-3">
+          <div className="flex bg-background-elevated p-1 rounded-xl mb-5 mx-3">
             <button
               onClick={() => setFormStep("profile")}
               className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${
                 formStep === "profile"
-                  ? "bg-[var(--color-primary)] shadow-sm text-white"
+                  ? "bg-primary shadow-sm text-white"
                   : "text-zinc-500 opacity-50"
               }`}
             >
@@ -363,7 +362,7 @@ function Profile() {
               onClick={() => setFormStep("reset")}
               className={`flex-1 py-1.5 text-[9px] font-black uppercase rounded-lg transition-all ${
                 formStep === "reset"
-                  ? "bg-[var(--color-primary)] shadow-sm text-white"
+                  ? "bg-primary shadow-sm text-white"
                   : "text-zinc-500 opacity-50"
               }`}
             >
@@ -395,7 +394,7 @@ function Profile() {
                   compact
                 />
               </div>
-              <div className="h-[1px] bg-zinc-100 dark:bg-zinc-800 my-3 opacity-50"></div>
+              <div className="h-px bg-zinc-100 dark:bg-zinc-800 my-3 opacity-50"></div>
               <div className="space-y-3">
                 <p className="text-[8px] font-black uppercase tracking-[0.2em] text-zinc-400">
                   Socials
@@ -419,7 +418,7 @@ function Profile() {
               </div>
               <button
                 type="submit"
-                className="w-full py-3 bg-[var(--color-primary)] text-white rounded-xl font-black uppercase text-[9px] tracking-widest mt-2 active:scale-95 transition-all"
+                className="w-full py-3 bg-primary text-white rounded-xl font-black uppercase text-[9px] tracking-widest mt-2 active:scale-95 transition-all"
               >
                 Update Profile
               </button>
@@ -486,7 +485,7 @@ function Profile() {
           <div className="space-y-4">
             <div
               onClick={() => fileInputRef.current.click()}
-              className="group cursor-pointer p-6 border-2 border-dashed border-[var(--border-color-primary)] rounded-[2rem] bg-[var(--color-background-elevated)] flex flex-col items-center justify-center hover:border-[var(--color-primary)] transition-all"
+              className="group cursor-pointer p-6 border-2 border-dashed border-primary rounded-4xl bg-background-elevated flex flex-col items-center justify-center hover:border-(--color-primary) transition-all"
             >
               <input
                 type="file"
@@ -495,7 +494,7 @@ function Profile() {
                 className="hidden"
                 accept="image/*"
               />
-              <FaUpload className="text-[var(--color-primary)] text-2xl mb-2" />
+              <FaUpload className="text-(--color-primary) text-2xl mb-2" />
               <span className="text-[10px] font-black uppercase tracking-widest">
                 Upload Image
               </span>
@@ -505,7 +504,7 @@ function Profile() {
                 <button
                   key={s}
                   onClick={() => handleAvatarChange(s)}
-                  className="p-0.5 rounded-xl bg-[var(--color-background-elevated)] border-2 border-transparent hover:border-[var(--color-primary)] transition-all"
+                  className="p-0.5 rounded-xl bg-background-elevated border-2 border-transparent hover:border-(--color-primary) transition-all"
                 >
                   <img
                     src={`https://api.dicebear.com/7.x/${s}/svg?seed=preview`}
@@ -517,7 +516,7 @@ function Profile() {
             </div>
             <button
               onClick={() => handleUpdateProfile()}
-              className="w-full py-4 bg-[var(--color-primary)] text-white rounded-2xl font-black uppercase text-xs"
+              className="w-full py-4 bg-primary text-white rounded-2xl font-black uppercase text-xs"
             >
               Confirm & Save
             </button>
@@ -530,7 +529,7 @@ function Profile() {
 
 
 const StatCard = ({ label, value, isFire }) => (
-  <div className="bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] p-4 rounded-3xl text-center hover:scale-105 transition-transform">
+  <div className="bg-background-elevated border border-primary p-4 rounded-3xl text-center hover:scale-105 transition-transform">
     <p className="text-[9px] font-black uppercase opacity-60 mb-1">{label}</p>
     <p className={`text-lg font-black ${isFire ? "text-orange-500" : ""}`}>
       {isFire && "🔥"} {value}
@@ -546,7 +545,7 @@ const ModernBar = ({ label, solved, total, color }) => (
         {solved}/{total}
       </span>
     </div>
-    <div className="h-2.5 w-full bg-[var(--color-background-elevated)] rounded-full overflow-hidden border border-[var(--border-color-primary)]">
+    <div className="h-2.5 w-full bg-background-elevated rounded-full overflow-hidden border border-primary">
       <div
         className={`h-full ${color} rounded-full transition-all duration-1000`}
         style={{ width: `${(solved / total) * 100}%` }}

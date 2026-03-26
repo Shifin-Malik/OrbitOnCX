@@ -8,6 +8,7 @@ import { FaQuestionCircle } from "react-icons/fa";
 import { useSelector } from "react-redux";
 import Login from "../pages/Login.jsx";
 import { IoPersonCircle } from "react-icons/io5";
+import { FaSearch } from "react-icons/fa";
 
 const NavBar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -18,9 +19,8 @@ const NavBar = () => {
 
   const navigate = useNavigate();
 
-  // Selector-ൽ മാറ്റം വരുത്തി: loading ഇവിടെ വേണ്ട, user മാത്രം മതി.
   const user = useSelector((state) => state.auth.user);
-  // Auth Loading സ്ലൈസിൽ നിന്ന് മാത്രം എടുക്കുന്നു (Login കാണിക്കാൻ മാത്രം)
+
   const isAuthLoading = useSelector((state) => state.auth.loading);
 
   const defaultAvatar =
@@ -55,9 +55,9 @@ const NavBar = () => {
   const allLinks = [
     { id: 1, name: "Home", icon: IoIosHome, path: "/" },
     { id: 2, name: "Compiler", icon: FaCode, path: "/compiler" },
-    { id: 3, name: "Problems", icon: SiLeetcode, path: "/leetcode" },
-    { id: 4, name: "Quiz", icon: FaQuestionCircle, path: "/quiz" },
-    { id: 5, name: "Profile", icon: IoPersonCircle, path: "/profile" },
+    { id: 3, name: "Search", icon: FaSearch, path: "/search" },
+    { id: 4, name: "Problems", icon: SiLeetcode, path: "/leetcode" },
+    { id: 5, name: "Quiz", icon: FaQuestionCircle, path: "/quiz" },
   ];
 
   const links = user ? allLinks : allLinks.slice(0, 2);
@@ -71,7 +71,6 @@ const NavBar = () => {
 
   const handleProfileClick = () => {
     if (user) {
-      // replace: true നൽകുന്നത് സെഷൻ ഹിസ്റ്ററി ക്ലീൻ ആയി വെക്കാൻ സഹായിക്കും
       navigate("/profile", { replace: true });
     } else {
       setModalMode("signin");
@@ -88,12 +87,11 @@ const NavBar = () => {
             : "bg-transparent py-6"
         }`}
       >
-        {/* Logo Section */}
         <div
           className="flex items-center gap-3 cursor-pointer group"
           onClick={() => navigate("/")}
         >
-          <div className="p-2.5 bg-gradient-to-br from-primary to-accent rounded-xl shadow-lg group-hover:rotate-6 transition-transform text-white">
+          <div className="p-2.5 bg-linear-to-br from-primary to-accent rounded-xl shadow-lg group-hover:rotate-6 transition-transform text-white">
             <FaCode size={20} />
           </div>
           <span className="text-2xl font-black text-primary tracking-tighter">
@@ -101,7 +99,6 @@ const NavBar = () => {
           </span>
         </div>
 
-        {/* Desktop Links */}
         <div className="hidden md:flex items-center gap-1 bg-primary/5 p-1.5 rounded-2xl border border-primary/10 backdrop-blur-sm">
           {links.map((link) => (
             <NavLink key={link.id} to={link.path} className={navStyle}>
@@ -111,7 +108,6 @@ const NavBar = () => {
           ))}
         </div>
 
-        {/* Right Section */}
         <div className="hidden md:flex items-center gap-4">
           <button
             onClick={toggleTheme}
@@ -156,7 +152,7 @@ const NavBar = () => {
                   {user?.name?.split(" ")[0] || "User"}
                 </p>
               </div>
-              <div className="relative p-0.5 rounded-xl bg-gradient-to-tr from-primary to-accent">
+              <div className="relative p-0.5 rounded-xl bg-linear-to-tr from-primary to-accent">
                 <img
                   src={imgSrc}
                   alt="profile"
@@ -176,9 +172,8 @@ const NavBar = () => {
         </button>
       </nav>
 
-      {/* Mobile Drawer */}
       {menuOpen && (
-        <div className="fixed inset-0 z-[60] md:hidden">
+        <div className="fixed inset-0 z-60 md:hidden">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setMenuOpen(false)}

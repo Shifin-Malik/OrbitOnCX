@@ -57,15 +57,15 @@ function Features() {
   return (
     <section className="py-24 px-6 md:px-12 bg-background relative overflow-hidden transition-colors duration-500">
       {/* Background Glow Effect */}
-      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full max-w-4xl bg-[var(--color-primary)] opacity-5 dark:opacity-10 blur-[120px] rounded-full pointer-events-none"></div>
+      <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full max-w-4xl bg-primary opacity-5 dark:opacity-10 blur-[120px] rounded-full pointer-events-none"></div>
 
       <div className="relative z-10 max-w-7xl mx-auto">
         <div className="text-center mb-20">
-          <h2 className="text-4xl md:text-5xl font-black text-[var(--text-color-primary)] tracking-tighter mb-6">
+          <h2 className="text-4xl md:text-5xl font-black text-primary tracking-tighter mb-6">
             Everything You Need to <br />
-            <span className="text-[var(--color-primary)]">Code Together</span>
+            <span className="text-(--color-primary)">Code Together</span>
           </h2>
-          <p className="text-[var(--text-color-secondary)] font-medium max-w-2xl mx-auto text-lg">
+          <p className="text-secondary font-medium max-w-2xl mx-auto text-lg">
             Professional-grade tools designed for seamless collaboration,
             interactive learning, and rapid development.
           </p>
@@ -78,7 +78,7 @@ function Features() {
             return (
               <div
                 key={index}
-                className="group p-8 rounded-[2.5rem] bg-[var(--color-background-soft)] border border-[var(--border-color-primary)] hover:border-[var(--color-primary)] transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-2"
+                className="group p-8 rounded-[2.5rem] bg-background-soft border border-primary hover:border-(--color-primary) transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-500/10 hover:-translate-y-2"
               >
                 <div
                   className={`w-14 h-14 flex items-center justify-center rounded-2xl ${feature.bg} ${feature.color} ${feature.darkColor} text-2xl mb-6 group-hover:scale-110 transition-all duration-500 shadow-sm`}
@@ -86,16 +86,16 @@ function Features() {
                   <Icon />
                 </div>
 
-                <h3 className="text-xl text-[var(--text-color-primary)] font-black mb-3 tracking-tight">
+                <h3 className="text-xl text-primary font-black mb-3 tracking-tight">
                   {feature.title}
                 </h3>
 
-                <p className="text-[var(--text-color-secondary)] text-sm leading-relaxed font-medium">
+                <p className="text-secondary text-sm leading-relaxed font-medium">
                   {feature.desc}
                 </p>
 
                
-                <div className="mt-6 w-8 h-1 bg-[var(--border-color-secondary)] rounded-full group-hover:w-16 group-hover:bg-[var(--color-primary)] transition-all duration-500"></div>
+                <div className="mt-6 w-8 h-1 bg-(--border-color-secondary) rounded-full group-hover:w-16 group-hover:bg-primary transition-all duration-500"></div>
               </div>
             );
           })}

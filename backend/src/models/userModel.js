@@ -22,7 +22,6 @@ const userSchema = new mongoose.Schema(
     password: {
       type: String,
       required: function () {
-        // authProvider 'local' ആണെങ്കിൽ മാത്രം പാസ്‌വേഡ് നിർബന്ധമാക്കുന്നു
         return this.authProvider === "local";
       },
       minlength: 6,
@@ -31,15 +30,15 @@ const userSchema = new mongoose.Schema(
 
     authProvider: {
       type: String,
-      enum: ["local", "google", "github"],
+      enum: ["local", "google"],
       default: "local",
     },
 
-    // CHANGE 3: ഗൂഗിൾ ഐഡി സേവ് ചെയ്യാൻ (ഓപ്ഷണൽ - സെക്യൂരിറ്റിക്ക് നല്ലതാണ്)
+    
     googleId: {
       type: String,
       unique: true,
-      sparse: true, // ഇമെയിൽ ലോഗിൻ ചെയ്യുന്നവർക്ക് ഇത് ഉണ്ടാവില്ല, അതുകൊണ്ട് sparse നിർബന്ധമാണ്
+      sparse: true,
     },
 
     isVerified: {
@@ -47,7 +46,7 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
 
-    otp: { type: String, default: undefined },
+    otp: { type: String, default: null },
     otpExpire: { type: Date },
 
     resetPasswordToken: { type: String, default: undefined },
@@ -55,7 +54,6 @@ const userSchema = new mongoose.Schema(
 
     avatar: {
       type: String,
-      default: "",
     },
 
     role: {
@@ -77,11 +75,12 @@ const userSchema = new mongoose.Schema(
 
     socialLinks: {
       github: { type: String, default: "" },
-      linkedin: { type: String, default: "" },
       website: { type: String, default: "" },
     },
+
     streak: { type: Number, default: 0 },
     lastActivity: { type: Date },
+
     problemsSolved: {
       easy: [{ type: mongoose.Schema.Types.ObjectId, ref: "Problem" }],
       medium: [{ type: mongoose.Schema.Types.ObjectId, ref: "Problem" }],

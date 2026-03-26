@@ -1,44 +1,81 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { executeCodeAPI } from "../api.js";
 
-/**
- * @description Async Thunk for executing code on the backend
- */
+import { executeCodeAPI, saveDraftAPI, getDraftAPI } from "../api.js";
+
+
 export const runCodeAction = createAsyncThunk(
   "compiler/run",
   async (payload, { rejectWithValue }) => {
     try {
       const response = await executeCodeAPI(payload);
       
-      // Backend-ൽ നിന്ന് ഡാറ്റ വരുന്നുണ്ടെന്ന് ഉറപ്പുവരുത്തുക
       if (response.data && response.data.success) {
-        return response.data.output;
-      } else {
-        // success false ആണെങ്കിൽ എറർ റിട്ടേൺ ചെയ്യുക
-        return rejectWithValue(response.data?.message || "Execution failed");
+        return response.data.output || "No output";
       }
+      return rejectWithValue(response.data?.message || "Execution failed");
     } catch (error) {
-      // Axios error handling
-      const message =
-        error.response?.data?.message || 
-        error.message || 
-        "Network error: Execution failed";
-      return rejectWithValue(message);
+      return rejectWithValue(
+        error.response?.data?.message || error.message || "Network error"
+      );
+    }
+  }
+);
+
+
+export const loadDraftAction = createAsyncThunk(
+  "compiler/loadDraft",
+  async ({ userId, language }, { rejectWithValue }) => {
+    try {
+      const response = await getDraftAPI(userId, language);
+      if (response.data && response.data.success) {
+        return response.data.code || "";
+      }
+      return rejectWithValue(response.data?.message || "Failed to load draft");
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || error.message || "Network error"
+      );
+    }
+  }
+);
+
+
+export const saveDraftAction = createAsyncThunk(
+  "compiler/saveDraft",
+  async (payload, { rejectWithValue }) => {
+    try {
+      const response = await saveDraftAPI(payload);
+      if (response.data && response.data.success) {
+        return response.data.draft;
+      }
+      return rejectWithValue(response.data?.message || "Failed to save draft");
+    } catch (error) {
+      return rejectWithValue(
+        error.response?.data?.message || error.message || "Network error"
+      );
     }
   }
 );
 
 const initialState = {
+  code: "",
   output: "",
-  compiling: false, 
+  compiling: false,
+  savingDraft: false,
+  loadingDraft: false,
   error: null,
+  draftError: null,
 };
 
 const compilerSlice = createSlice({
   name: "compiler",
   initialState,
   reducers: {
-    // ഔട്ട്‌പുട്ട് ക്ലിയർ ചെയ്യാൻ (Manual trigger)
+    
+    setCode: (state, action) => {
+      state.code = action.payload;
+    },
+   
     clearOutput: (state) => {
       state.output = "";
       state.error = null;
@@ -47,26 +84,48 @@ const compilerSlice = createSlice({
   },
   extraReducers: (builder) => {
     builder
-      // Code Execution തുടങ്ങുമ്പോൾ
       .addCase(runCodeAction.pending, (state) => {
         state.compiling = true;
         state.error = null;
-        state.output = ""; 
+        state.output = "";
       })
-      // സക്സസ് ആകുമ്പോൾ
       .addCase(runCodeAction.fulfilled, (state, action) => {
         state.compiling = false;
-        state.output = action.payload; // Payload string ആണെന്ന് ഉറപ്പാക്കുക
-        state.error = null;
+        state.output = action.payload;
       })
-      // ഫെയിൽ ആകുമ്പോൾ
       .addCase(runCodeAction.rejected, (state, action) => {
         state.compiling = false;
-        // payload ഉണ്ടെങ്കിൽ അത് എടുക്കുക, അല്ലെങ്കിൽ default error
-        state.error = action.payload || "Something went wrong during execution";
+        state.error = action.payload;
+      })
+
+     
+      .addCase(loadDraftAction.pending, (state) => {
+        state.loadingDraft = true;
+        state.draftError = null;
+      })
+      .addCase(loadDraftAction.fulfilled, (state, action) => {
+        state.loadingDraft = false;
+        state.code = action.payload;
+      })
+      .addCase(loadDraftAction.rejected, (state, action) => {
+        state.loadingDraft = false;
+        state.draftError = action.payload;
+      })
+
+      
+      .addCase(saveDraftAction.pending, (state) => {
+        state.savingDraft = true;
+        state.draftError = null;
+      })
+      .addCase(saveDraftAction.fulfilled, (state) => {
+        state.savingDraft = false;
+      })
+      .addCase(saveDraftAction.rejected, (state, action) => {
+        state.savingDraft = false;
+        state.draftError = action.payload;
       });
   },
 });
 
-export const { clearOutput } = compilerSlice.actions;
+export const { clearOutput, setCode } = compilerSlice.actions;
 export default compilerSlice.reducer;

@@ -28,6 +28,7 @@ export const registerUser = asyncHandler(async (req, res) => {
     lowerCaseAlphabets: false,
     digits: true,
   });
+  
   const otpExpire = Date.now() + 15 * 60 * 1000; 
 
   const salt = await bcrypt.genSalt(10);
@@ -90,8 +91,13 @@ export const verifyEmail = asyncHandler(async (req, res) => {
     throw new Error("Invalid or expired OTP");
   }
 
+
+  user.isVerified = true;
+
+ 
   user.otp = undefined;
   user.otpExpire = undefined;
+
   await user.save();
 
   generateTokens(res, user._id, user.role);
@@ -105,6 +111,7 @@ export const verifyEmail = asyncHandler(async (req, res) => {
       email: user.email,
       role: user.role,
       avatar: user.avatar,
+      isVerified: user.isVerified
     },
   });
 });
@@ -118,7 +125,6 @@ export const loginUser = asyncHandler(async (req, res) => {
     "+password",
   );
 
-  
   if (
     !user ||
     !user.password ||
@@ -225,7 +231,6 @@ export const resetPassword = asyncHandler(async (req, res) => {
 
   const formattedEmail = email.toLowerCase().trim();
 
-  
   const user = await User.findOne({
     email: formattedEmail,
     otp: otp.toString().trim(),
@@ -266,7 +271,7 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
   if (!refreshToken) {
     res.status(401);
     throw new Error("No refresh token");
-  }
+  };
 
   try {
     const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
@@ -351,3 +356,4 @@ export const googleAuth = asyncHandler(async (req, res) => {
     throw new Error("Google authentication failed. Please try again.");
   }
 });
+

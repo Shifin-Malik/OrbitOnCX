@@ -8,11 +8,12 @@ const EXCLUDE_FIELDS =
 
 export const getProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).select(EXCLUDE_FIELDS);
+  console.log(user)
 
   if (!user) {
     res.status(404);
     throw new Error("User not found");
-  }
+  };
 
 
   const userObj = user.toObject();
@@ -34,66 +35,55 @@ export const getProfile = asyncHandler(async (req, res) => {
   });
 });
 
+
 export const updateProfile = asyncHandler(async (req, res) => {
-  const {
-    name,
-    bio,
-    github,
-    linkedin,
-    website,
-    oldPassword,
-    newPassword,
-    avatar, 
-  } = req.body;
+  const userId = req.user._id;
 
-  const user = await User.findById(req.user._id).select("+password");
+  const updateData = { ...req.body };
 
-  if (!user) {
-    res.status(404);
-    throw new Error("User not found");
+  delete updateData.oldPassword;
+  delete updateData.newPassword;
+
+  for (let key in updateData) {
+    if (typeof updateData[key] === "string") {
+      updateData[key] = updateData[key].trim();
+    }
   }
 
-  
-  if (name !== undefined) user.name = name.trim();
-  if (bio !== undefined) user.bio = bio.trim();
-
-  
   if (req.file) {
-    
-    user.avatar = req.file.path;
-  } else if (avatar) {
-   
-    user.avatar = avatar;
+    updateData.avatar = req.file.path;
   }
 
-  
-  user.socialLinks = {
-    github: github !== undefined ? github : user.socialLinks?.github,
-    linkedin: linkedin !== undefined ? linkedin : user.socialLinks?.linkedin,
-    website: website !== undefined ? website : user.socialLinks?.website,
-  };
+  if (req.body.newPassword) {
+    const user = await User.findById(userId).select("+password");
 
-  
-  if (newPassword) {
-    if (!oldPassword) {
+    if (!req.body.oldPassword) {
       res.status(400);
       throw new Error("Current password is required");
     }
 
-    const isMatch = await bcrypt.compare(oldPassword, user.password);
+    const isMatch = await bcrypt.compare(
+      req.body.oldPassword,
+      user.password
+    );
+
     if (!isMatch) {
       res.status(401);
       throw new Error("Current password incorrect");
     }
 
     const salt = await bcrypt.genSalt(10);
-    user.password = await bcrypt.hash(newPassword, salt);
+    updateData.password = await bcrypt.hash(
+      req.body.newPassword,
+      salt
+    );
   }
 
-  user.markModified("socialLinks");
-  await user.save();
-
-  const updatedUser = await User.findById(user._id).select("-password");
+  const updatedUser = await User.findByIdAndUpdate(
+    userId,
+    { $set: updateData },
+    { new: true, runValidators: true }
+  ).select("-password");
 
   res.status(200).json({
     success: true,
