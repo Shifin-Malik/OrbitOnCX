@@ -1,6 +1,6 @@
 import { configureStore, combineReducers } from "@reduxjs/toolkit";
-import { 
-  persistStore, 
+import {
+  persistStore,
   persistReducer,
   FLUSH,
   REHYDRATE,
@@ -12,18 +12,18 @@ import {
 import { CookieStorage } from "redux-persist-cookie-storage";
 import Cookies from "js-cookie";
 import authReducer from "../features/auth/authSlice.js";
-import compiler from '../features/compiler/compilerSlice.js';
+import compiler from "../features/compiler/compilerSlice.js";
 
 const rootReducer = combineReducers({
-  auth: authReducer, 
-  compiler: compiler
+  auth: authReducer,
+  compiler: compiler,
 });
 
 const persistConfig = {
   key: "orbiton_root",
   version: 1,
   storage: new CookieStorage(Cookies),
-  blacklist: ["auth"], 
+  blacklist: ["auth", "compiler"],
 };
 
 const persistedReducer = persistReducer(persistConfig, rootReducer);

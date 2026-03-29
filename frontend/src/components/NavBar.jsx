@@ -1,4 +1,4 @@
-import React, { useState, useEffect, memo, useCallback } from "react";
+import React, { useState, useEffect, memo, useCallback, useRef } from "react";
 import { HiOutlineMenu, HiX } from "react-icons/hi";
 import { NavLink, useNavigate } from "react-router-dom";
 import { IoIosHome } from "react-icons/io";
@@ -9,6 +9,7 @@ import { useSelector } from "react-redux";
 import Login from "../pages/Login.jsx";
 import { IoPersonCircle } from "react-icons/io5";
 import { FaSearch } from "react-icons/fa";
+import ProfileDropdown from "./ProfileDropdown.jsx";
 
 const NavBar = () => {
   const [menuOpen, setMenuOpen] = useState(false);
@@ -16,7 +17,8 @@ const NavBar = () => {
   const [modalMode, setModalMode] = useState("signup");
   const [scrolled, setScrolled] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
-
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const dropdownRef = useRef(null);
   const navigate = useNavigate();
 
   const user = useSelector((state) => state.auth.user);
@@ -26,6 +28,16 @@ const NavBar = () => {
   const defaultAvatar =
     "https://api.dicebear.com/7.x/avataaars/svg?seed=Orbiton";
   const [imgSrc, setImgSrc] = useState(defaultAvatar);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20);
@@ -55,23 +67,25 @@ const NavBar = () => {
   const allLinks = [
     { id: 1, name: "Home", icon: IoIosHome, path: "/" },
     { id: 2, name: "Compiler", icon: FaCode, path: "/compiler" },
-    { id: 3, name: "Search", icon: FaSearch, path: "/search" },
+
     { id: 4, name: "Problems", icon: SiLeetcode, path: "/leetcode" },
     { id: 5, name: "Quiz", icon: FaQuestionCircle, path: "/quiz" },
+    { id: 6, name: "Profile", icon: IoPersonCircle, path: "/profile" },
   ];
 
   const links = user ? allLinks : allLinks.slice(0, 2);
 
   const navStyle = ({ isActive }) =>
-    `px-4 py-2 rounded-xl transition-all duration-300 flex items-center gap-2 font-bold text-[11px] uppercase tracking-[0.1em] ${
+    `px-3 py-2 rounded-xl transition-all duration-300 flex items-center gap-2 font-bold text-[11px] uppercase tracking-[0.1em] ${
       isActive
         ? "bg-primary text-white shadow-lg"
         : "text-secondary hover:text-primary hover:bg-secondary/20"
     }`;
 
+ 
   const handleProfileClick = () => {
     if (user) {
-      navigate("/profile", { replace: true });
+      setDropdownOpen((prev) => !prev);
     } else {
       setModalMode("signin");
       setModalOpen(true);
@@ -81,7 +95,7 @@ const NavBar = () => {
   return (
     <>
       <nav
-        className={`fixed top-0 w-full z-50 transition-all duration-300 px-6 md:px-16 flex justify-between items-center ${
+        className={`fixed top-0 w-full z-50 transition-all duration-300 px-6 md:px-8 flex justify-between items-center ${
           scrolled
             ? "bg-background-soft/90 backdrop-blur-md py-3 border-b border-primary shadow-sm"
             : "bg-transparent py-6"
@@ -115,6 +129,12 @@ const NavBar = () => {
           >
             {darkMode ? <FaSun size={14} /> : <FaMoon size={14} />}
           </button>
+          <button
+            onClick={toggleTheme}
+            className="p-2 rounded-xl bg-secondary text-primary hover:scale-105 transition"
+          >
+            <FaSearch size={14} />
+          </button>
 
           {isAuthLoading && !user ? (
             <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -144,14 +164,6 @@ const NavBar = () => {
               className="flex items-center gap-4 pl-4 border-l border-secondary cursor-pointer group"
               onClick={handleProfileClick}
             >
-              <div className="text-right hidden lg:block">
-                <p className="text-[9px] text-primary font-black uppercase tracking-widest leading-none mb-1">
-                  Developer
-                </p>
-                <p className="text-sm font-black text-primary">
-                  {user?.name?.split(" ")[0] || "User"}
-                </p>
-              </div>
               <div className="relative p-0.5 rounded-xl bg-linear-to-tr from-primary to-accent">
                 <img
                   src={imgSrc}
@@ -160,6 +172,12 @@ const NavBar = () => {
                   onError={() => setImgSrc(defaultAvatar)}
                 />
               </div>
+              {dropdownOpen && (
+                <ProfileDropdown
+                  user={user}
+                  onClose={() => setDropdownOpen(false)}
+                />
+              )}
             </div>
           )}
         </div>

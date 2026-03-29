@@ -17,6 +17,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useGoogleLogin } from "@react-oauth/google";
 import { googleLoginAction } from "../features/auth/authSlice";
 
+import { resetCompilerState } from "../features/compiler/compilerSlice";
 import {
   register,
   verifyEmail,
@@ -34,7 +35,6 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
 
   const googleLoginHandler = useGoogleLogin({
     onSuccess: (tokenResponse) => {
-      
       dispatch(googleLoginAction(tokenResponse.access_token));
     },
     onError: () => toast.error("Google Login Failed"),
@@ -55,34 +55,35 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
   };
 
   useEffect(() => {
-    if (isError && message) {
-      toast.error(message);
+  if (isError && message) {
+    toast.error(message);
+    dispatch(resetAuthState());
+  }
+
+  if (isSuccess && message) {
+    toast.success(message);
+
+    if (mode === "signup") {
+      setMode("verify");
+    } else if (mode === "forgot") {
+      setMode("reset");
+    } else if (mode === "verify") {
+      dispatch(login({ email: formData.email, password: formData.password }));
+      setMode("signin");
+    } else if (mode === "reset") {
+      setMode("signin");
+      setFormData((prev) => ({ ...prev, otp: "", password: "" }));
+    } else if (mode === "signin") {
+      dispatch(resetCompilerState());
       dispatch(resetAuthState());
+      onClose();
+      window.location.reload(); 
     }
-
-    if (isSuccess && message) {
-      toast.success(message);
-
-      if (mode === "signup") {
-      
-        setMode("verify");
-      } else if (mode === "forgot") {
-       
-        setMode("reset");
-      } else if (mode === "verify") {
-        
-        dispatch(login({ email: formData.email, password: formData.password }));
-        setMode("signin"); 
-      } else if (mode === "reset") {
-        setMode("signin");
-        setFormData((prev) => ({ ...prev, otp: "", password: "" }));
-      } else if (mode === "signin") {
-        onClose();
-      }
-
-      dispatch(resetAuthState());
+    if (mode !== "signin") {
+        dispatch(resetAuthState());
     }
-  }, [isError, isSuccess, message, mode, dispatch, onClose, formData]);
+  }
+}, [isError, isSuccess, message, mode, dispatch, onClose, formData]);
 
   useEffect(() => {
     if (isOpen) {
@@ -128,13 +129,13 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
           }),
         );
         break;
-      
+
       case "reset":
         dispatch(
           resetPassword({
             email: formData.email,
             otp: formData.otp,
-            newPassword: formData.password, 
+            newPassword: formData.password,
           }),
         );
         break;
@@ -155,7 +156,6 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
           exit={{ opacity: 0, scale: 0.95 }}
           className="bg-background-soft border border-primary/20 rounded-3xl w-full max-w-82.5 p-5 relative shadow-2xl overflow-hidden"
         >
-         
           <div className="flex justify-between items-center mb-3">
             {["verify", "forgot", "reset"].includes(mode) ? (
               <button
@@ -176,7 +176,6 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
             </button>
           </div>
 
-         
           <div className="text-center mb-4">
             <h1 className="text-xl font-black text-primary tracking-tight uppercase leading-none">
               {mode === "signin" && "Welcome Back"}
@@ -255,7 +254,6 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
               </div>
             )}
 
-          
             <button
               disabled={loading}
               type="submit"
@@ -265,7 +263,6 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
             </button>
           </form>
 
-          
           {(mode === "signin" || mode === "signup") && (
             <>
               <div className="relative my-4">
@@ -278,7 +275,7 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <SocialBtn
-                  onClick={() => googleLoginHandler()} 
+                  onClick={() => googleLoginHandler()}
                   icon={<FaGoogle className="text-rose-500" />}
                   label="Google"
                 />
@@ -287,7 +284,6 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
             </>
           )}
 
-          
           <p className="text-[10px] text-center mt-4 text-secondary">
             {mode === "signin" ? "New here?" : "Joined already?"}
             <button
@@ -304,7 +300,6 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
   );
 }
 
-
 const Input = ({ icon, className = "", name, ...props }) => (
   <div className="relative">
     <div className="absolute left-3 top-1/2 -translate-y-1/2 text-muted text-xs group-focus-within:text-primary transition-colors z-10">
@@ -318,11 +313,10 @@ const Input = ({ icon, className = "", name, ...props }) => (
   </div>
 );
 
-
 const SocialBtn = ({ icon, label, onClick }) => (
   <button
     type="button"
-    onClick={onClick} 
+    onClick={onClick}
     className="flex items-center justify-center gap-2 py-2 border border-primary/10 rounded-lg bg-background hover:bg-primary/5 transition-all font-bold text-[9px] text-primary uppercase active:scale-95"
   >
     {icon} {label}

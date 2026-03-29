@@ -1,0 +1,40 @@
+services:
+  frontend:
+    build: ./frontend
+    container_name: orbitonx_frontend
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    depends_on:
+      - backend
+    env_file:
+      - ./frontend/.env
+
+  backend:
+    build: ./backend
+    container_name: orbitonx_backend
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - /app/node_modules
+    depends_on:
+      - mongo
+    env_file:
+      - ./backend/.env
+
+  mongo:
+    image: mongo:7
+    container_name: orbitonx_mongo
+    ports:
+      - "27018:27017"
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: strongpassword
+    volumes:
+      - mongo_data:/data/db
+
+volumes:
+  mongo_data:

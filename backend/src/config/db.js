@@ -6,11 +6,10 @@ export const connectDB = async () => {
     if (!DB_URI) {
       throw new Error("Mongodb uri not defined in .env");
     }
-    await mongoose.connect(`${DB_URI}/code-editor`);
+    await mongoose.connect(DB_URI);
     console.log("Mongodb connected successfully");
   } catch (error) {
     console.error("Mongodb connection failed", error.message);
     process.exit(1);
   }
 };
-

@@ -1,5 +1,4 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-
 import { executeCodeAPI, saveDraftAPI, getDraftAPI } from "../api.js";
 
 
@@ -8,17 +7,16 @@ export const runCodeAction = createAsyncThunk(
   async (payload, { rejectWithValue }) => {
     try {
       const response = await executeCodeAPI(payload);
-      
       if (response.data && response.data.success) {
         return response.data.output || "No output";
       }
       return rejectWithValue(response.data?.message || "Execution failed");
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || error.message || "Network error"
+        error.response?.data?.message || error.message || "Network error",
       );
     }
-  }
+  },
 );
 
 
@@ -28,15 +26,15 @@ export const loadDraftAction = createAsyncThunk(
     try {
       const response = await getDraftAPI(userId, language);
       if (response.data && response.data.success) {
-        return response.data.code || "";
+        return response.data.code !== undefined ? response.data.code : null;
       }
       return rejectWithValue(response.data?.message || "Failed to load draft");
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || error.message || "Network error"
+        error.response?.data?.message || error.message || "Network error",
       );
     }
-  }
+  },
 );
 
 
@@ -51,10 +49,10 @@ export const saveDraftAction = createAsyncThunk(
       return rejectWithValue(response.data?.message || "Failed to save draft");
     } catch (error) {
       return rejectWithValue(
-        error.response?.data?.message || error.message || "Network error"
+        error.response?.data?.message || error.message || "Network error",
       );
     }
-  }
+  },
 );
 
 const initialState = {
@@ -63,6 +61,7 @@ const initialState = {
   compiling: false,
   savingDraft: false,
   loadingDraft: false,
+  isInitialized: false, 
   error: null,
   draftError: null,
 };
@@ -71,19 +70,25 @@ const compilerSlice = createSlice({
   name: "compiler",
   initialState,
   reducers: {
-    
     setCode: (state, action) => {
       state.code = action.payload;
     },
-   
     clearOutput: (state) => {
       state.output = "";
       state.error = null;
       state.compiling = false;
     },
+    
+      resetCompilerState: (state) => {
+        state.code = "";
+        state.isInitialized = false;
+        state.output = "";
+        state.error = null;
+      },
   },
   extraReducers: (builder) => {
     builder
+      
       .addCase(runCodeAction.pending, (state) => {
         state.compiling = true;
         state.error = null;
@@ -98,24 +103,26 @@ const compilerSlice = createSlice({
         state.error = action.payload;
       })
 
-     
       .addCase(loadDraftAction.pending, (state) => {
         state.loadingDraft = true;
-        state.draftError = null;
+        state.isInitialized = false; 
       })
       .addCase(loadDraftAction.fulfilled, (state, action) => {
         state.loadingDraft = false;
-        state.code = action.payload;
+        state.isInitialized = true;
+        if (action.payload !== null) {
+          state.code = action.payload;
+        }
       })
       .addCase(loadDraftAction.rejected, (state, action) => {
         state.loadingDraft = false;
+        state.isInitialized = true; 
         state.draftError = action.payload;
       })
 
-      
+
       .addCase(saveDraftAction.pending, (state) => {
         state.savingDraft = true;
-        state.draftError = null;
       })
       .addCase(saveDraftAction.fulfilled, (state) => {
         state.savingDraft = false;
@@ -127,5 +134,6 @@ const compilerSlice = createSlice({
   },
 });
 
-export const { clearOutput, setCode } = compilerSlice.actions;
+export const { clearOutput, setCode, resetCompilerState } =
+  compilerSlice.actions;
 export default compilerSlice.reducer;

@@ -15,7 +15,8 @@ const codeDraftSchema = new mongoose.Schema(
     code: {
       type: String,
       default: "",
-      maxlength: [10000, "Code is too long!"], 
+      trim: true,
+      maxlength: [10000, "Code is too long! Max 10,000 characters allowed"],
     },
   },
   {

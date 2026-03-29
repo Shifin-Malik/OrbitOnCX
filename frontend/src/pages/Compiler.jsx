@@ -27,13 +27,14 @@ import {
 
 const Compiler = () => {
   const dispatch = useDispatch();
-  const { user } = useSelector((state) => state.auth);
 
+  const { user, loading: authLoading } = useSelector((state) => state.auth);
   const {
     code,
     output: reduxOutput,
     compiling,
     loadingDraft,
+    isInitialized,
     error,
   } = useSelector((state) => state.compiler);
 
@@ -44,21 +45,27 @@ const Compiler = () => {
         name: "JavaScript",
         icon: <SiJavascript />,
         ext: "js",
-        defaultCode: `// OrbitonCX JS\nconsole.log("Hello, Universe!");`,
+        defaultCode: `// OrbitonCX JS
+console.log("Hello, Universe!");`,
       },
       {
         id: "python",
         name: "Python",
         icon: <SiPython />,
         ext: "py",
-        defaultCode: `# OrbitonCX Python\nprint("Hello, Universe!")`,
+        defaultCode: `# OrbitonCX Python
+print("Hello, Universe!")`,
       },
       {
         id: "java",
         name: "Java",
         icon: <SiOpenjdk />,
         ext: "java",
-        defaultCode: `public class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello, Universe!");\n  }\n}`,
+        defaultCode: `public class Main {
+  public static void main(String[] args) {
+    System.out.println("Hello, Universe!");
+  }
+}`,
       },
       {
         id: "cpp",
@@ -66,7 +73,12 @@ const Compiler = () => {
         nameDisplay: "C++",
         icon: <SiCplusplus />,
         ext: "cpp",
-        defaultCode: `#include <iostream>\n\nint main() {\n    std::cout << "Hello, Universe!" << std::endl;\n    return 0;\n}`,
+        defaultCode: `#include <iostream>
+
+int main() {
+    std::cout << "Hello, Universe!" << std::endl;
+    return 0;
+}`,
       },
       {
         id: "c",
@@ -74,7 +86,12 @@ const Compiler = () => {
         nameDisplay: "C",
         icon: <HiCode />,
         ext: "c",
-        defaultCode: `#include <stdio.h>\n\nint main() {\n    printf("Hello, Universe!\\n");\n    return 0;\n}`,
+        defaultCode: `#include <stdio.h>
+
+int main() {
+    printf("Hello, Universe!\\n");
+    return 0;
+}`,
       },
       {
         id: "go",
@@ -82,7 +99,13 @@ const Compiler = () => {
         nameDisplay: "Go",
         icon: <SiGo />,
         ext: "go",
-        defaultCode: `package main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello, Universe!")\n}`,
+        defaultCode: `package main
+
+import "fmt"
+
+func main() {
+    fmt.Println("Hello, Universe!")
+}`,
       },
       {
         id: "rust",
@@ -90,7 +113,9 @@ const Compiler = () => {
         nameDisplay: "Rust",
         icon: <SiRust />,
         ext: "rs",
-        defaultCode: `fn main() {\n    println!("Hello, Universe!");\n}`,
+        defaultCode: `fn main() {
+    println!("Hello, Universe!");
+}`,
       },
       {
         id: "php",
@@ -98,18 +123,27 @@ const Compiler = () => {
         nameDisplay: "PHP",
         icon: <SiPhp />,
         ext: "php",
-        defaultCode: `<?php\necho "Hello, Universe!";\n?>`,
+        defaultCode: `<?php
+echo "Hello, Universe!";
+?>`,
       },
     ],
-    [],
+    []
   );
 
   const [language, setLanguage] = useState("javascript");
   const [editorTheme, setEditorTheme] = useState(() =>
-    document.documentElement.classList.contains("dark") ? "vs-dark" : "light",
+    document.documentElement.classList.contains("dark") ? "vs-dark" : "light"
   );
 
-  // Theme Sync logic
+  const currentLang = useMemo(
+    () => languages.find((l) => l.id === language),
+    [languages, language]
+  );
+
+  const editorLanguage =
+    language === "cpp" ? "cpp" : language === "c" ? "c" : language;
+
   useEffect(() => {
     const observer = new MutationObserver(() => {
       const isDark = document.documentElement.classList.contains("dark");
@@ -125,17 +159,22 @@ const Compiler = () => {
   }, []);
 
   useEffect(() => {
+    if (authLoading) return;
+
     dispatch(clearOutput());
+
     if (user?._id) {
       dispatch(loadDraftAction({ userId: user._id, language }));
     } else {
-      const langData = languages.find((l) => l.id === language);
-      dispatch(setCode(langData?.defaultCode || ""));
+      dispatch(setCode(currentLang?.defaultCode || ""));
     }
-  }, [dispatch, user?._id, language, languages]);
+  }, [dispatch, authLoading, user?._id, language, currentLang]);
 
   useEffect(() => {
-    if (!user?._id || loadingDraft || !code) return;
+    if (!user?._id) return;
+    if (loadingDraft) return;
+    if (!isInitialized) return;
+    if (typeof code !== "string") return;
 
     const timer = setTimeout(() => {
       dispatch(
@@ -143,49 +182,62 @@ const Compiler = () => {
           userId: user._id,
           language,
           code,
-        }),
+        })
       );
-    }, 2000); // 2s
+    }, 1500);
 
     return () => clearTimeout(timer);
-  }, [dispatch, user?._id, language, code, loadingDraft]);
+  }, [dispatch, user?._id, language, code, loadingDraft, isInitialized]);
 
   const handleLanguageChange = (e) => {
     setLanguage(e.target.value);
   };
 
-  const runCode = () => {
+  const handleEditorChange = useCallback(
+    (value) => {
+      dispatch(setCode(value || ""));
+    },
+    [dispatch]
+  );
+
+  const runCode = useCallback(() => {
     dispatch(
       runCodeAction({
         language,
         code,
-        userId: user ? user._id : null,
-      }),
+        userId: user?._id || null,
+      })
     );
-  };
+  }, [dispatch, language, code, user?._id]);
 
-  const currentLang = languages.find((l) => l.id === language);
-  const editorLanguage =
-    language === "cpp" ? "cpp" : language === "c" ? "c" : language;
+  if (authLoading || (user?._id && loadingDraft && !isInitialized)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <div className="w-12 h-12 border-4 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <p className="text-xs font-black tracking-[0.3em] text-muted uppercase animate-pulse">
+            Syncing_OrbitonCX...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 pt-24 font-sans bg-background transition-colors duration-300">
       <div className="w-full max-w-350 h-[85vh] flex flex-col bg-background-soft rounded-3xl overflow-hidden border border-primary shadow-xl">
-        {/* TOP BAR */}
         <div className="h-16 px-6 flex items-center justify-between bg-background-elevated border-b border-primary shrink-0">
           <div className="flex items-center gap-6">
-            <div className="flex items-center gap-2 text-(--color-primary)">
+            <div className="flex items-center gap-2 text-primary">
               <HiCode size={24} />
               <span className="font-black text-sm tracking-tighter text-primary hidden sm:block uppercase">
-                Orbiton<span className="text-(--color-primary)">CX</span>
+                Orbiton<span className="text-primary-dark">CX</span>
               </span>
             </div>
 
-            <div className="relative flex items-center bg-background-soft rounded-xl border border-primary hover:border-(--color-primary) transition-all overflow-hidden">
-              <div className="flex items-center pl-4 pointer-events-none">
-                <span className="text-(--color-primary) text-lg">
-                  {currentLang?.icon}
-                </span>
+            <div className="relative flex items-center bg-background-soft rounded-xl border border-primary hover:border-primary-dark transition-all overflow-hidden">
+              <div className="flex items-center pl-4 pointer-events-none text-primary text-lg">
+                {currentLang?.icon}
               </div>
 
               <select
@@ -203,6 +255,7 @@ const Compiler = () => {
                   </option>
                 ))}
               </select>
+
               <div className="absolute right-3 pointer-events-none">
                 <HiChevronDown className="text-muted" />
               </div>
@@ -213,7 +266,7 @@ const Compiler = () => {
             <button
               onClick={runCode}
               disabled={compiling || loadingDraft}
-              className="bg-primary text-white dark:text-(--color-secondary) px-6 py-2 rounded-xl font-black text-[10px] tracking-[0.2em] hover:opacity-90 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
+              className="bg-primary text-white px-6 py-2 rounded-xl font-black text-[10px] tracking-[0.2em] hover:opacity-90 transition-all flex items-center gap-2 active:scale-95 disabled:opacity-50"
             >
               {compiling ? (
                 <div className="w-3 h-3 border-2 border-white/20 border-t-white rounded-full animate-spin" />
@@ -226,21 +279,19 @@ const Compiler = () => {
         </div>
 
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden">
-          {/* EDITOR */}
           <div className="flex-3 relative bg-background-soft border-b lg:border-b-0 lg:border-r border-primary">
             <Editor
               height="100%"
               theme={editorTheme}
               language={editorLanguage}
               value={code}
-              onChange={(v) => dispatch(setCode(v || ""))}
+              onChange={handleEditorChange}
               options={{
                 fontSize: 15,
                 fontFamily: "'JetBrains Mono', monospace",
                 minimap: { enabled: false },
                 padding: { top: 20 },
                 lineNumbers: "on",
-                renderLineHighlight: "all",
                 scrollbar: {
                   verticalScrollbarSize: 8,
                   horizontalScrollbarSize: 8,
@@ -257,6 +308,7 @@ const Compiler = () => {
                   Console Output
                 </span>
               </div>
+
               <button
                 onClick={() => dispatch(clearOutput())}
                 className="text-muted hover:text-red-500 transition-colors"
@@ -267,7 +319,9 @@ const Compiler = () => {
 
             <div className="flex-1 p-6 font-mono text-xs md:text-sm overflow-y-auto text-secondary leading-relaxed">
               {error ? (
-                <pre className="text-red-500 whitespace-pre-wrap">{error}</pre>
+                <pre className="text-red-500 whitespace-pre-wrap font-bold">
+                  {error}
+                </pre>
               ) : reduxOutput ? (
                 <pre className="whitespace-pre-wrap">{reduxOutput}</pre>
               ) : (

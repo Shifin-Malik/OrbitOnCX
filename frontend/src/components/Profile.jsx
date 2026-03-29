@@ -33,7 +33,6 @@ const avatarStyles = [
   "croodles",
 ];
 
-
 const InputField = ({
   label,
   value,
@@ -79,7 +78,6 @@ const InputField = ({
   );
 };
 
-
 function Profile() {
   const { user } = useSelector((state) => state.auth);
   const navigate = useNavigate();
@@ -123,7 +121,7 @@ function Profile() {
   }, [user, navigate]);
 
   const handleLogout = () => {
-    toast.success("Logging out...");
+    toast.success("Successfully logged out");
     setTimeout(() => {
       dispatch(logout());
       dispatch(resetAuthState());
@@ -221,7 +219,6 @@ function Profile() {
       `}</style>
 
       <div className="max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8">
-       
         <div className="lg:col-span-4 space-y-6">
           <div className="bg-background-soft border border-primary rounded-[3rem] p-8 shadow-2xl backdrop-blur-md text-center">
             <div className="relative group p-1.5 rounded-[3rem] bg-linear-to-tr from-primary to-accent inline-block">
@@ -267,7 +264,6 @@ function Profile() {
           </div>
         </div>
 
-       
         <div className="lg:col-span-8 space-y-4">
           <div className="bg-background-soft border border-primary rounded-[3rem] p-8 md:p-12 shadow-xl">
             <h3 className="text-xl font-black flex items-center gap-3 mb-10 uppercase tracking-tighter">
@@ -337,7 +333,6 @@ function Profile() {
         </div>
       </div>
 
-      
       {showEditModal && (
         <Modal
           onClose={() => {
@@ -479,7 +474,6 @@ function Profile() {
         </Modal>
       )}
 
-   
       {showAvatarModal && (
         <Modal onClose={() => setShowAvatarModal(false)} title="Update Photo">
           <div className="space-y-4">
@@ -526,7 +520,6 @@ function Profile() {
     </div>
   );
 }
-
 
 const StatCard = ({ label, value, isFire }) => (
   <div className="bg-background-elevated border border-primary p-4 rounded-3xl text-center hover:scale-105 transition-transform">

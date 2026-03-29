@@ -11,12 +11,19 @@ import userRoutes from "./routes/userRoutes/userRoute.js";
 
 import errorHandler from "./middlewares/errorMiddleware.js";
 
+// import redisClient from './config/redis.js';
 const app = express();
 const PORT = process.env.PORT || 5001;
 
 connectDB();
 
 connectCloudinary();
+
+// redisClient()
+
+console.log("PORT:", process.env.PORT);
+console.log("MONGO:", process.env.MONGODB_URI);
+console.log("CLOUDINARY:", process.env.CLOUDINARY_CLOUD_NAME);
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

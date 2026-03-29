@@ -8,7 +8,6 @@ const EXCLUDE_FIELDS =
 
 export const getProfile = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).select(EXCLUDE_FIELDS);
-  console.log(user)
 
   if (!user) {
     res.status(404);
