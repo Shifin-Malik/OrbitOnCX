@@ -12,9 +12,11 @@ import { useDispatch, useSelector } from "react-redux";
 import { MdQuiz, MdOutlineVerified } from "react-icons/md";
 import { logout, resetAuthState } from "../features/auth/authSlice";
 import { toast } from "react-hot-toast";
+import { useNavigate } from "react-router-dom";
 
 const ProfileDropdown = ({ handleAction }) => {
   const dispatch = useDispatch();
+  const navigate = useNavigate();
 
   const { user } = useSelector((state) => state.auth);
 
@@ -32,6 +34,7 @@ const ProfileDropdown = ({ handleAction }) => {
         <div className="relative">
           <div className="p-0.5 rounded-xl bg-linear-to-tr from-primary to-accent shadow-md">
             <img
+              onClick={() => navigate("/profile")}
               src={
                 user?.avatar ||
                 "https://api.dicebear.com/7.x/avataaars/svg?seed=Orbiton"

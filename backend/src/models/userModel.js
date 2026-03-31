@@ -34,7 +34,6 @@ const userSchema = new mongoose.Schema(
       default: "local",
     },
 
-    
     googleId: {
       type: String,
       unique: true,
@@ -45,12 +44,6 @@ const userSchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-
-    otp: { type: String, default: null },
-    otpExpire: { type: Date },
-
-    resetPasswordToken: { type: String, default: undefined },
-    resetPasswordExpire: { type: Date },
 
     avatar: {
       type: String,

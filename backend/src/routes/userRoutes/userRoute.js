@@ -14,6 +14,9 @@ import {
 
 import {
   getProfile,
+  getUserById,
+  searchUsers,
+  toggleFollow,
   updateProfile,
 } from "../../controllers/userController/profileController.js";
 
@@ -41,6 +44,12 @@ router.post("/reset-password", resetPassword);
 router.get("/profile", protect, getProfile);
 
 router.put("/profile", protect, uploadAvatar.single("avatar"), updateProfile);
+
+router.get("/search-users", protect, searchUsers);
+
+router.put("/follow/:id", protect, toggleFollow);
+
+router.get("/profile/:id", protect, getUserById);
 
 router.post("/google", googleAuth);
 

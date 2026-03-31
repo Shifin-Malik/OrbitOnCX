@@ -23,6 +23,16 @@ export const editUserData = (formData) => {
   });
 };
 
+export const searchUser = (query) => {
+  return API.get(`/users/search-users`, {
+    params: { search: query },
+  });
+};
+
+export const toggleFollowAPI = (userId) => API.put(`/users/follow/${userId}`);
+
+export const getUserByIdAPI = (userId) => API.get(`/users/profile/${userId}`);
+
 export const googleAuth = (accessToken) =>
   API.post("/users/google", { access_token: accessToken });
 

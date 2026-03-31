@@ -1,359 +1,637 @@
 import asyncHandler from "express-async-handler";
-import User from "../../models/userModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import otpGenerator from "otp-generator";
+import axios from "axios";
+
+import User from "../../models/userModel.js";
+import redisClient from "../../config/redis.js";
+import { redisKeys } from "../../utlis/redisKeys.js";
+import { sendEmail } from "../../utlis/sendEmail.js";
 import {
   generateTokens,
   getCookieOptions,
   generateAccessToken,
 } from "../../utlis/generateTokens.js";
-import otpGenerator from "otp-generator";
-import { sendEmail } from "../../utlis/sendEmail.js";
-import axios from "axios";
+
+const OTP_EXPIRY_SECONDS = 15 * 60;
+const RESET_OTP_EXPIRY_SECONDS = 10 * 60;
+const REFRESH_TOKEN_EXPIRY_SECONDS = 7 * 24 * 60 * 60;
+const LOGIN_ATTEMPT_EXPIRY_SECONDS = 15 * 60;
+const LOGIN_BLOCK_EXPIRY_SECONDS = 15 * 60;
+const MAX_LOGIN_ATTEMPTS = 5;
+
+const validateEmail = (email) => {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+};
+
+const normalizeEmail = (email) => {
+  if (!email || typeof email !== "string") return "";
+  return email.toLowerCase().trim();
+};
+
+const validatePassword = (password) => {
+  return typeof password === "string" && password.trim().length >= 6;
+};
+
+const validateName = (name) => {
+  return (
+    typeof name === "string" &&
+    name.trim().length >= 3 &&
+    name.trim().length <= 30
+  );
+};
+
+const generateOtp = () => {
+  return otpGenerator.generate(6, {
+    digits: true,
+    upperCaseAlphabets: false,
+    lowerCaseAlphabets: false,
+    specialChars: false,
+  });
+};
+
+const setRefreshTokenInRedis = async (
+  userId,
+  refreshToken,
+  deviceId = "default",
+) => {
+  await redisClient.set(
+    redisKeys.refreshToken(userId, deviceId),
+    refreshToken,
+    {
+      EX: REFRESH_TOKEN_EXPIRY_SECONDS,
+    },
+  );
+};
+
+const removeRefreshTokenFromRedis = async (userId, deviceId = "default") => {
+  await redisClient.del(redisKeys.refreshToken(userId, deviceId));
+};
+
+const blacklistRefreshToken = async (refreshToken) => {
+  if (!refreshToken) return;
+
+  await redisClient.set(redisKeys.blacklistedRefresh(refreshToken), "1", {
+    EX: REFRESH_TOKEN_EXPIRY_SECONDS,
+  });
+};
+
+const clearAuthCookies = (res) => {
+  const options = getCookieOptions();
+  res.clearCookie("accessToken", options);
+  res.clearCookie("refreshToken", options);
+};
+
+const getDeviceId = (req) => {
+  return req.headers["x-device-id"] || "default";
+};
+
+const getGoogleUserInfo = async (accessToken) => {
+  const { data } = await axios.get(
+    "https://www.googleapis.com/oauth2/v3/userinfo",
+    {
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    },
+  );
+
+  return data;
+};
+
+const checkBlockedUser = (user, res) => {
+  if (user?.isBlocked) {
+    res.status(403);
+    throw new Error("Your account has been blocked");
+  }
+};
+
+const incrementLoginAttempts = async (email) => {
+  const attemptsKey = redisKeys.loginAttempts(email);
+  const blockKey = redisKeys.loginBlock(email);
+
+  const attempts = await redisClient.incr(attemptsKey);
+
+  if (attempts === 1) {
+    await redisClient.expire(attemptsKey, LOGIN_ATTEMPT_EXPIRY_SECONDS);
+  }
+
+  if (attempts >= MAX_LOGIN_ATTEMPTS) {
+    await redisClient.set(blockKey, "1", {
+      EX: LOGIN_BLOCK_EXPIRY_SECONDS,
+    });
+  }
+
+  return attempts;
+};
+
+const clearLoginAttempts = async (email) => {
+  await redisClient.del(redisKeys.loginAttempts(email));
+  await redisClient.del(redisKeys.loginBlock(email));
+};
 
 
 export const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
-  const normalizedEmail = email.toLowerCase().trim();
 
-  const userExists = await User.findOne({ email: normalizedEmail });
-  if (userExists) {
+  const trimmedName = typeof name === "string" ? name.trim() : "";
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!validateName(trimmedName)) {
+    res.status(400);
+    throw new Error("Name must be between 3 and 30 characters");
+  }
+
+  if (!validateEmail(normalizedEmail)) {
+    res.status(400);
+    throw new Error("Please provide a valid email address");
+  }
+
+  if (!validatePassword(password)) {
+    res.status(400);
+    throw new Error("Password must be at least 6 characters");
+  }
+
+  const existingUser = await User.findOne({ email: normalizedEmail });
+
+  if (existingUser && existingUser.isVerified) {
     res.status(400);
     throw new Error("User already exists");
   }
-  
-  const otp = otpGenerator.generate(6, {
-    upperCaseAlphabets: false,
-    specialChars: false,
-    lowerCaseAlphabets: false,
-    digits: true,
-  });
-  
-  const otpExpire = Date.now() + 15 * 60 * 1000; 
 
-  const salt = await bcrypt.genSalt(10);
-  const hashedPassword = await bcrypt.hash(password, salt);
+  const hashedPassword = await bcrypt.hash(password, 10);
+  const otp = generateOtp();
+  const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${encodeURIComponent(
+    `${trimmedName}-${Date.now()}`,
+  )}`;
 
-  const seed = `${name.trim()}-${Date.now()}`;
-  const avatar = `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}`;
-
-  const user = await User.create({
-    name: name.trim(),
-    email: normalizedEmail,
-    password: hashedPassword,
-    avatar,
-    otp,
-    otpExpire,
-  });
-
-  const htmlContent = `
-    <div style="font-family: sans-serif; text-align: center;">
-      <h2>Welcome to OrbitonCX!</h2>
-      <p>Please use the following OTP to verify your account:</p>
-      <h1 style="color: #6366f1; letter-spacing: 5px;">${otp}</h1>
-      <p>This code will expire in 15 minutes.</p>
-    </div>
-  `;
-
-  const emailSent = await sendEmail(
-    normalizedEmail,
-    "Verify Your Account - OrbitonCX",
-    `Your OTP is ${otp}`,
-    htmlContent,
-  );
-
-  if (!emailSent) {
-    await User.findByIdAndDelete(user._id);
-    res.status(500);
-    throw new Error("Error sending verification email. Please try again.");
+  if (existingUser && !existingUser.isVerified) {
+    existingUser.name = trimmedName;
+    existingUser.password = hashedPassword;
+    existingUser.avatar = existingUser.avatar || avatar;
+    await existingUser.save();
+  } else {
+    await User.create({
+      name: trimmedName,
+      email: normalizedEmail,
+      password: hashedPassword,
+      avatar,
+      isVerified: false,
+      authProvider: "local",
+    });
   }
+
+  await redisClient.set(redisKeys.verifyOtp(normalizedEmail), otp, {
+    EX: OTP_EXPIRY_SECONDS,
+  });
+
+  await sendEmail(
+    normalizedEmail,
+    "🔐 Verify Your Email - OrbitonX",
+    `
+  <div style="font-family: 'Poppins', Arial, sans-serif; background-color: #ecfdf5; padding: 40px;">
+    
+    <div style="max-width: 500px; margin: auto; background: #ffffff; border-radius: 12px; padding: 30px; text-align: center; box-shadow: 0 5px 20px rgba(0,0,0,0.05);">
+      
+      <h2 style="color: #065f46; margin-bottom: 10px;">
+        Welcome to OrbitonX 🚀
+      </h2>
+
+      <p style="color: #374151; font-size: 14px;">
+        Please use the OTP below to verify your email address.
+      </p>
+
+      <div style="margin: 25px 0;">
+        <span style="
+          display: inline-block;
+          background: #059669;
+          color: white;
+          font-size: 28px;
+          font-weight: bold;
+          letter-spacing: 6px;
+          padding: 12px 24px;
+          border-radius: 8px;
+        ">
+          ${otp}
+        </span>
+      </div>
+
+      <p style="color: #6b7280; font-size: 13px;">
+        ⏳ This OTP will expire in <b>15 minutes</b>
+      </p>
+
+      <hr style="margin: 25px 0; border: none; border-top: 1px solid #e5e7eb;" />
+
+      <p style="color: #9ca3af; font-size: 12px;">
+        If you did not request this, please ignore this email.
+      </p>
+
+      <p style="color: #065f46; font-weight: 600; margin-top: 15px;">
+        — OrbitonX Team 
+      </p>
+
+    </div>
+  </div>
+  `,
+  );
 
   res.status(201).json({
     success: true,
-    message: "Registration successful! OTP sent to email.",
-    email: user.email,
+    message: "OTP sent to your email",
   });
 });
 
 
 export const verifyEmail = asyncHandler(async (req, res) => {
   const { email, otp } = req.body;
-  const normalizedEmail = email.toLowerCase().trim();
+  const normalizedEmail = normalizeEmail(email);
+  const deviceId = getDeviceId(req);
 
-  const user = await User.findOne({
-    email: normalizedEmail,
-    otp: otp.trim(),
-    otpExpire: { $gt: Date.now() },
-  });
+  if (!validateEmail(normalizedEmail)) {
+    res.status(400);
+    throw new Error("Please provide a valid email address");
+  }
 
-  if (!user) {
+  if (!otp || typeof otp !== "string" || otp.trim().length !== 6) {
+    res.status(400);
+    throw new Error("Please provide a valid OTP");
+  }
+
+  const savedOtp = await redisClient.get(redisKeys.verifyOtp(normalizedEmail));
+
+  if (!savedOtp || savedOtp !== otp.trim()) {
     res.status(400);
     throw new Error("Invalid or expired OTP");
   }
 
+  const user = await User.findOne({ email: normalizedEmail });
+
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  checkBlockedUser(user, res);
 
   user.isVerified = true;
-
- 
-  user.otp = undefined;
-  user.otpExpire = undefined;
-
   await user.save();
 
-  generateTokens(res, user._id, user.role);
+  await redisClient.del(redisKeys.verifyOtp(normalizedEmail));
+
+  const { refreshToken } = generateTokens(res, user._id, user.role);
+
+  await setRefreshTokenInRedis(user._id.toString(), refreshToken, deviceId);
 
   res.status(200).json({
     success: true,
     message: "Email verified successfully",
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      avatar: user.avatar,
-      isVerified: user.isVerified
-    },
   });
 });
 
 
 export const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
+  const normalizedEmail = normalizeEmail(email);
+  const deviceId = getDeviceId(req);
 
-  
-  const user = await User.findOne({ email: email.toLowerCase().trim() }).select(
+  if (!validateEmail(normalizedEmail)) {
+    res.status(400);
+    throw new Error("Please provide a valid email address");
+  }
+
+  if (!validatePassword(password)) {
+    res.status(400);
+    throw new Error("Password must be at least 6 characters");
+  }
+
+  const isBlocked = await redisClient.get(
+    redisKeys.loginBlock(normalizedEmail),
+  );
+  if (isBlocked) {
+    res.status(429);
+    throw new Error("Too many failed attempts. Please try again later");
+  }
+
+  const user = await User.findOne({ email: normalizedEmail }).select(
     "+password",
   );
 
-  if (
-    !user ||
-    !user.password ||
-    !(await bcrypt.compare(password, user.password))
-  ) {
+  if (!user) {
+    await incrementLoginAttempts(normalizedEmail);
     res.status(401);
     throw new Error("Invalid credentials");
   }
 
+  checkBlockedUser(user, res);
 
-  if (user.otp) {
-    res.status(403);
-    throw new Error("Please verify your email before logging in.");
+  if (user.authProvider === "google") {
+    res.status(400);
+    throw new Error("This account uses Google sign-in");
   }
 
- 
-  generateTokens(res, user._id, user.role);
+  const isPasswordMatched = await bcrypt.compare(password, user.password);
+
+  if (!isPasswordMatched) {
+    await incrementLoginAttempts(normalizedEmail);
+    res.status(401);
+    throw new Error("Invalid credentials");
+  }
+
+  if (!user.isVerified) {
+    res.status(403);
+    throw new Error("Please verify your email first");
+  }
+
+  await clearLoginAttempts(normalizedEmail);
+
+  const { refreshToken } = generateTokens(res, user._id, user.role);
+
+  await setRefreshTokenInRedis(user._id.toString(), refreshToken, deviceId);
 
   res.status(200).json({
     success: true,
-    message: "User login successfully",
-    user: {
-      id: user._id,
-      name: user.name,
-      email: user.email,
-      role: user.role,
-      avatar: user.avatar,
-    },
+    message: "Login successful",
   });
 });
 
 
 export const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
-  const formattedEmail = email.toLowerCase().trim();
-  const user = await User.findOne({ email: formattedEmail });
+  const normalizedEmail = normalizeEmail(email);
+
+  if (!validateEmail(normalizedEmail)) {
+    res.status(400);
+    throw new Error("Please provide a valid email address");
+  }
+
+  const user = await User.findOne({ email: normalizedEmail });
 
   if (!user) {
     res.status(404);
-    throw new Error("No account found with this email");
+    throw new Error("User not found");
   }
 
-  
-  const otp = otpGenerator.generate(6, {
-    upperCaseAlphabets: false,
-    specialChars: false,
-    lowerCaseAlphabets: false,
-    digits: true,
+  checkBlockedUser(user, res);
+
+  const otp = generateOtp();
+
+  await redisClient.set(redisKeys.resetOtp(normalizedEmail), otp, {
+    EX: RESET_OTP_EXPIRY_SECONDS,
   });
 
-  
-  user.otp = otp;
-  user.otpExpire = Date.now() + 10 * 60 * 1000; 
-  await user.save();
-
-  
-  const htmlContent = `
-    <div style="font-family: sans-serif; text-align: center; border: 1px solid #e2e8f0; padding: 20px; border-radius: 10px;">
-      <h2 style="color: #1e293b;">Password Reset Request</h2>
-      <p style="color: #475569;">Use the OTP below to reset your password. This code is valid for 10 minutes.</p>
-      <div style="background-color: #f1f5f9; padding: 10px; display: inline-block; border-radius: 5px;">
-        <h1 style="color: #6366f1; letter-spacing: 5px; margin: 0;">${otp}</h1>
-      </div>
-      <p style="color: #94a3b8; font-size: 12px; margin-top: 20px;">If you didn't request this, please ignore this email.</p>
-    </div>
-  `;
-
- 
-  try {
-    const emailSent = await sendEmail(
-      formattedEmail,
-      "Password Reset OTP - OrbitonCX",
-      `Your password reset OTP is ${otp}`,
-      htmlContent, 
-    );
-
-    if (!emailSent) {
-      throw new Error("Email provider error");
-    }
-
-    res.status(200).json({
-      success: true,
-      message: "OTP sent successfully to your email",
-    });
-  } catch (error) {
+  await sendEmail(
+    normalizedEmail,
+    "🔑 Reset Your Password - OrbitonX",
+    `
+  <div style="font-family: 'Poppins', Arial, sans-serif; background-color: #ecfdf5; padding: 40px;">
     
-    user.otp = undefined;
-    user.otpExpire = undefined;
-    await user.save();
+    <div style="max-width: 500px; margin: auto; background: #ffffff; border-radius: 12px; padding: 30px; text-align: center; box-shadow: 0 5px 20px rgba(0,0,0,0.05);">
+      
+      <h2 style="color: #065f46; margin-bottom: 10px;">
+        Reset Your Password 🔑
+      </h2>
 
-    res.status(500);
-    throw new Error("Email could not be sent. Please try again later.");
-  }
+      <p style="color: #374151; font-size: 14px;">
+        Use the OTP below to reset your password.
+      </p>
+
+      <div style="margin: 25px 0;">
+        <span style="
+          display: inline-block;
+          background: #059669;
+          color: white;
+          font-size: 28px;
+          font-weight: bold;
+          letter-spacing: 6px;
+          padding: 12px 24px;
+          border-radius: 8px;
+        ">
+          ${otp}
+        </span>
+      </div>
+
+      <p style="color: #6b7280; font-size: 13px;">
+        ⏳ This OTP will expire in <b>10 minutes</b>
+      </p>
+
+      <hr style="margin: 25px 0; border: none; border-top: 1px solid #e5e7eb;" />
+
+      <p style="color: #9ca3af; font-size: 12px;">
+        If you did not request a password reset, please ignore this email.
+      </p>
+
+      <p style="color: #065f46; font-weight: 600; margin-top: 15px;">
+        — OrbitonX Team 
+      </p>
+
+    </div>
+  </div>
+  `,
+  );
+
+  res.status(200).json({
+    success: true,
+    message: "Password reset OTP sent to your email",
+  });
 });
+
 
 
 export const resetPassword = asyncHandler(async (req, res) => {
   const { email, otp, newPassword } = req.body;
+  const normalizedEmail = normalizeEmail(email);
 
-  if (!email || !otp || !newPassword) {
+  if (!validateEmail(normalizedEmail)) {
     res.status(400);
-    throw new Error("Please provide email, otp, and new password");
+    throw new Error("Please provide a valid email address");
   }
 
-  const formattedEmail = email.toLowerCase().trim();
+  if (!otp || typeof otp !== "string" || otp.trim().length !== 6) {
+    res.status(400);
+    throw new Error("Please provide a valid OTP");
+  }
 
-  const user = await User.findOne({
-    email: formattedEmail,
-    otp: otp.toString().trim(),
-    otpExpire: { $gt: Date.now() },
-  });
+  if (!validatePassword(newPassword)) {
+    res.status(400);
+    throw new Error("New password must be at least 6 characters");
+  }
 
-  if (!user) {
+  const savedOtp = await redisClient.get(redisKeys.resetOtp(normalizedEmail));
+
+  if (!savedOtp || savedOtp !== otp.trim()) {
     res.status(400);
     throw new Error("Invalid or expired OTP");
   }
 
- 
-  const salt = await bcrypt.genSalt(10);
-  user.password = await bcrypt.hash(newPassword, salt);
+  const user = await User.findOne({ email: normalizedEmail }).select(
+    "+password",
+  );
 
-  
-  user.otp = undefined;
-  user.otpExpire = undefined;
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
 
+  checkBlockedUser(user, res);
+
+  const isSamePassword = await bcrypt.compare(newPassword, user.password);
+  if (isSamePassword) {
+    res.status(400);
+    throw new Error("New password cannot be the same as the old password");
+  }
+
+  user.password = await bcrypt.hash(newPassword, 10);
   await user.save();
+
+  await redisClient.del(redisKeys.resetOtp(normalizedEmail));
+  await removeRefreshTokenFromRedis(user._id.toString());
+  clearAuthCookies(res);
 
   res.status(200).json({
     success: true,
-    message: "Password reset successful. You can now login.",
+    message: "Password reset successful. Please login again",
   });
 });
 
 
 export const logoutUser = asyncHandler(async (req, res) => {
-  const options = getCookieOptions();
-  res.clearCookie("accessToken", options);
-  res.clearCookie("refreshToken", options);
-  res.status(200).json({ success: true, message: "Logged out successfully" });
+  const refreshToken = req.cookies?.refreshToken;
+  const deviceId = getDeviceId(req);
+
+  if (refreshToken) {
+    try {
+      const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+
+      await removeRefreshTokenFromRedis(decoded.id, deviceId);
+      await blacklistRefreshToken(refreshToken);
+    } catch (error) {
+      console.warn("Logout token verification failed:", error.message);
+    }
+  }
+
+  clearAuthCookies(res);
+
+  return res.status(200).json({
+    success: true,
+    message: "Logged out successfully",
+  });
 });
+
+
 
 export const refreshAccessToken = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.refreshToken;
+  const deviceId = getDeviceId(req);
+
   if (!refreshToken) {
     res.status(401);
-    throw new Error("No refresh token");
-  };
-
-  try {
-    const decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
-    const user = await User.findById(decoded.id);
-    if (!user) {
-      res.status(401);
-      throw new Error("User not found");
-    }
-
-    const newAccessToken = generateAccessToken(user._id, user.role);
-    res.cookie("accessToken", newAccessToken, {
-      ...getCookieOptions(),
-      maxAge: 15 * 60 * 1000,
-    });
-
-    res.status(200).json({
-      success: true,
-      user: { id: user._id, name: user.name, role: user.role },
-    });
-  } catch (error) {
-    res.clearCookie("accessToken", getCookieOptions());
-    res.clearCookie("refreshToken", getCookieOptions());
-    res.status(401);
-    throw new Error("Invalid refresh token");
+    throw new Error("No refresh token found");
   }
+
+  const isBlacklisted = await redisClient.get(
+    redisKeys.blacklistedRefresh(refreshToken),
+  );
+
+  if (isBlacklisted) {
+    res.status(401);
+    throw new Error("Refresh token is blacklisted");
+  }
+
+  let decoded;
+  try {
+    decoded = jwt.verify(refreshToken, process.env.JWT_REFRESH_SECRET);
+  } catch (error) {
+    res.status(401);
+    throw new Error("Invalid or expired refresh token");
+  }
+
+  const storedToken = await redisClient.get(
+    redisKeys.refreshToken(decoded.id, deviceId),
+  );
+
+  if (!storedToken || storedToken !== refreshToken) {
+    res.status(401);
+    throw new Error("Session expired. Please login again");
+  }
+
+  const user = await User.findById(decoded.id);
+
+  if (!user) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  checkBlockedUser(user, res);
+
+  const newAccessToken = generateAccessToken(user._id, user.role);
+
+  res.cookie("accessToken", newAccessToken, {
+    ...getCookieOptions(),
+    maxAge: 15 * 60 * 1000,
+  });
+
+  res.status(200).json({
+    success: true,
+    message: "Access token refreshed successfully",
+  });
 });
+
 
 export const googleAuth = asyncHandler(async (req, res) => {
   const { access_token } = req.body;
+  const deviceId = getDeviceId(req);
 
-  if (!access_token) {
+  if (!access_token || typeof access_token !== "string") {
     res.status(400);
-    throw new Error("Access token is required");
+    throw new Error("Google access token is required");
   }
 
+  let googleData;
   try {
-    const { data } = await axios.get(
-      `https://www.googleapis.com/oauth2/v3/userinfo?access_token=${access_token}`,
-    );
+    googleData = await getGoogleUserInfo(access_token);
+  } catch (error) {
+    res.status(401);
+    throw new Error("Invalid Google access token");
+  }
 
-    const { email, name, picture, sub: googleId } = data;
-    const normalizedEmail = email.toLowerCase().trim();
+  const { email, name, picture, sub: googleId } = googleData;
+  const normalizedEmail = normalizeEmail(email);
 
-    let user = await User.findOne({ email: normalizedEmail });
+  if (!validateEmail(normalizedEmail)) {
+    res.status(400);
+    throw new Error("Unable to fetch valid Google account email");
+  }
 
-    if (!user) {
-      user = await User.create({
-        name,
-        email: normalizedEmail,
-        avatar: picture,
-        googleId,
-        authProvider: "google",
-        isVerified: true,
-      });
-    } else {
+  let user = await User.findOne({ email: normalizedEmail });
+
+  if (user) {
+    checkBlockedUser(user, res);
+
+    if (user.authProvider === "local" && !user.googleId) {
       user.googleId = googleId;
       user.authProvider = "google";
       user.isVerified = true;
-
-      if (!user.avatar) user.avatar = picture;
-
-      
+      if (picture) user.avatar = picture;
       await user.save({ validateBeforeSave: false });
     }
-
-    generateTokens(res, user._id, user.role);
-
-    res.status(200).json({
-      success: true,
-      message: "Google login successful",
-      user: {
-        id: user._id,
-        name: user.name,
-        email: user.email,
-        role: user.role,
-        avatar: user.avatar,
-      },
+  } else {
+    user = await User.create({
+      name: name?.trim() || "Google User",
+      email: normalizedEmail,
+      avatar: picture || "",
+      googleId,
+      authProvider: "google",
+      isVerified: true,
     });
-  } catch (error) {
-    console.error("Google Auth Error:", error.response?.data || error.message);
-    res.status(401);
-    throw new Error("Google authentication failed. Please try again.");
   }
-});
 
+  const { refreshToken } = generateTokens(res, user._id, user.role);
+
+  await setRefreshTokenInRedis(user._id.toString(), refreshToken, deviceId);
+
+  res.status(200).json({
+    success: true,
+    message: "Google login successful",
+  });
+});

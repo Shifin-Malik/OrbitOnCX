@@ -6,12 +6,13 @@ import Cookies from "js-cookie";
 
 const initialState = {
   user: null,
+  searchResults: [],
   loading: false,
   isError: false,
   isSuccess: false,
   message: "",
+  selectedUser: null,
 };
-
 
 export const register = createAsyncThunk(
   "auth/register",
@@ -92,6 +93,34 @@ export const logout = createAsyncThunk("auth/logout", async (_, thunkAPI) => {
   }
 });
 
+export const toggleFollowAsync = createAsyncThunk(
+  "auth/toggleFollow",
+  async (targetUserId, thunkAPI) => {
+    try {
+      const response = await authAPI.toggleFollowAPI(targetUserId);
+      return { targetUserId, data: response.data };
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Action failed",
+      );
+    }
+  },
+);
+
+export const getUserProfileByIdAsync = createAsyncThunk(
+  "auth/getUserProfileById",
+  async (userId, thunkAPI) => {
+    try {
+      const response = await authAPI.getUserByIdAPI(userId);
+      return response.data.user;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to fetch user profile",
+      );
+    }
+  },
+);
+
 export const getProfile = createAsyncThunk(
   "auth/getProfile",
   async (_, thunkAPI) => {
@@ -118,6 +147,20 @@ export const updateProfile = createAsyncThunk(
   },
 );
 
+export const searchUsersAsync = createAsyncThunk(
+  "auth/searchUsers",
+  async (query, thunkAPI) => {
+    try {
+      const response = await authAPI.searchUser(query);
+      return response.data.users;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Search failed",
+      );
+    }
+  },
+);
+
 export const googleLoginAction = createAsyncThunk(
   "auth/googleLogin",
   async (accessToken, thunkAPI) => {
@@ -132,8 +175,6 @@ export const googleLoginAction = createAsyncThunk(
   },
 );
 
-
-
 const authSlice = createSlice({
   name: "auth",
   initialState,
@@ -144,16 +185,21 @@ const authSlice = createSlice({
       state.isSuccess = false;
       state.message = "";
     },
+    clearSearchResults: (state) => {
+      state.searchResults = [];
+    },
+    resetSelectedUser: (state) => {
+      state.selectedUser = null;
+    },
   },
   extraReducers: (builder) => {
     builder
-      
+
       .addCase(register.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.isSuccess = true;
         state.message = payload?.message || "Registration successful";
       })
-      // Verify Email
       .addCase(verifyEmail.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.isSuccess = true;
@@ -161,7 +207,6 @@ const authSlice = createSlice({
         state.message = payload?.message;
         localStorage.setItem("isLoggedIn", "true");
       })
-      // Login
       .addCase(login.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.isSuccess = true;
@@ -169,7 +214,6 @@ const authSlice = createSlice({
         state.message = payload?.message || "Authenticated successfully";
         localStorage.setItem("isLoggedIn", "true");
       })
-      // Logout
       .addCase(logout.fulfilled, (state) => {
         state.user = null;
         state.loading = false;
@@ -178,7 +222,6 @@ const authSlice = createSlice({
         state.message = "";
         localStorage.removeItem("isLoggedIn");
       })
-      // Get Profile
       .addCase(getProfile.pending, (state) => {
         state.loading = true;
       })
@@ -194,14 +237,12 @@ const authSlice = createSlice({
         state.isError = false;
         localStorage.removeItem("isLoggedIn");
       })
-      // Update Profile
       .addCase(updateProfile.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.isSuccess = true;
         state.user = payload?.user;
         state.message = payload?.message;
       })
-      // Google Login
       .addCase(googleLoginAction.fulfilled, (state, { payload }) => {
         state.loading = false;
         state.isSuccess = true;
@@ -210,7 +251,71 @@ const authSlice = createSlice({
         localStorage.setItem("isLoggedIn", "true");
       })
 
-      
+      .addCase(getUserProfileByIdAsync.fulfilled, (state, { payload }) => {
+        state.loading = false;
+        state.selectedUser = payload;
+      })
+      .addCase(getUserProfileByIdAsync.pending, (state) => {
+        state.loading = true;
+        state.selectedUser = null;
+      })
+      .addCase(getUserProfileByIdAsync.rejected, (state) => {
+        state.loading = false;
+        state.selectedUser = null;
+      })
+
+      .addCase(searchUsersAsync.fulfilled, (state, action) => {
+        state.searchResults = action.payload;
+      })
+      .addCase(searchUsersAsync.rejected, (state) => {
+        state.searchResults = [];
+      })
+
+      .addCase(toggleFollowAsync.fulfilled, (state, action) => {
+        const { targetUserId, data } = action.payload;
+
+        // 1. Search Result Sync
+        if (state.searchResults) {
+          state.searchResults = state.searchResults.map((u) =>
+            u._id.toString() === targetUserId.toString()
+              ? { ...u, isFollowing: data.isFollowing }
+              : u,
+          );
+        }
+
+        if (state.user) {
+          const following = state.user.following || [];
+          const targetIdStr = targetUserId.toString();
+
+          if (data.isFollowing) {
+            const exists = following.some(
+              (id) => id.toString() === targetIdStr,
+            );
+            if (!exists) {
+              state.user.following = [...following, targetUserId];
+            }
+          } else {
+            state.user.following = following.filter(
+              (id) => id.toString() !== targetIdStr,
+            );
+          }
+        }
+
+        if (
+          state.selectedUser &&
+          state.selectedUser._id.toString() === targetUserId.toString()
+        ) {
+          state.selectedUser.isFollowing = data.isFollowing;
+
+          if (state.selectedUser.stats) {
+            const currentFollowers =
+              state.selectedUser.stats.followerCount || 0;
+            state.selectedUser.stats.followerCount = data.isFollowing
+              ? currentFollowers + 1
+              : Math.max(0, currentFollowers - 1);
+          }
+        }
+      })
       .addMatcher(
         (action) =>
           [
@@ -223,12 +328,14 @@ const authSlice = createSlice({
           state.message = payload?.message;
         },
       )
-    
+
       .addMatcher(
         (action) =>
           action.type.startsWith("auth/") &&
           action.type.endsWith("/pending") &&
-          !action.type.includes("getProfile"),
+          !action.type.includes("getProfile") &&
+          !action.type.includes("searchUsers") &&
+          !action.type.includes("toggleFollow"),
         (state) => {
           state.loading = true;
           state.isError = false;
@@ -236,7 +343,7 @@ const authSlice = createSlice({
           state.message = "";
         },
       )
-      
+
       .addMatcher(
         (action) =>
           action.type.startsWith("auth/") &&
@@ -254,9 +361,17 @@ const authSlice = createSlice({
 const authPersistConfig = {
   key: "auth",
   storage: new CookieStorage(Cookies),
-  blacklist: ["loading", "isError", "isSuccess", "message"],
+  blacklist: [
+    "loading",
+    "isError",
+    "isSuccess",
+    "message",
+    "searchResults",
+    "selectedUser",
+  ],
 };
 
-export const { resetAuthState } = authSlice.actions;
+export const { resetAuthState, clearSearchResults, resetSelectedUser } =
+  authSlice.actions;
 
 export default persistReducer(authPersistConfig, authSlice.reducer);

@@ -7,7 +7,6 @@ import { SiLeetcode } from "react-icons/si";
 import { FaQuestionCircle } from "react-icons/fa";
 import { useSelector } from "react-redux";
 import Login from "../pages/Login.jsx";
-import { IoPersonCircle } from "react-icons/io5";
 import { FaSearch } from "react-icons/fa";
 import ProfileDropdown from "./ProfileDropdown.jsx";
 
@@ -67,10 +66,9 @@ const NavBar = () => {
   const allLinks = [
     { id: 1, name: "Home", icon: IoIosHome, path: "/" },
     { id: 2, name: "Compiler", icon: FaCode, path: "/compiler" },
-
+    { id: 3, name: "Search", icon: FaSearch, path: "/search" },
     { id: 4, name: "Problems", icon: SiLeetcode, path: "/leetcode" },
     { id: 5, name: "Quiz", icon: FaQuestionCircle, path: "/quiz" },
-    { id: 6, name: "Profile", icon: IoPersonCircle, path: "/profile" },
   ];
 
   const links = user ? allLinks : allLinks.slice(0, 2);
@@ -82,7 +80,6 @@ const NavBar = () => {
         : "text-secondary hover:text-primary hover:bg-secondary/20"
     }`;
 
- 
   const handleProfileClick = () => {
     if (user) {
       setDropdownOpen((prev) => !prev);
@@ -128,12 +125,6 @@ const NavBar = () => {
             className="p-2 rounded-xl bg-secondary text-primary hover:scale-105 transition"
           >
             {darkMode ? <FaSun size={14} /> : <FaMoon size={14} />}
-          </button>
-          <button
-            onClick={toggleTheme}
-            className="p-2 rounded-xl bg-secondary text-primary hover:scale-105 transition"
-          >
-            <FaSearch size={14} />
           </button>
 
           {isAuthLoading && !user ? (
