@@ -2,16 +2,30 @@ import React, { useEffect } from "react";
 import { Routes, Route, useLocation, matchPath } from "react-router-dom";
 import { useDispatch } from "react-redux";
 import { getProfile } from "./features/auth/authSlice";
+
+// User Pages
 import Home from "./pages/Home";
 import NavBar from "./components/NavBar";
 import ProfilePage from "./pages/ProfilePage";
 import Quiz from "./pages/Quiz";
-import ProblemListUI from "./pages/ProblemListUI";
+import ProblemListUI from "./pages/ProblemPage";
 import Compiler from "./pages/Compiler";
 import NotFound from "./pages/NotFound";
-import ProtectedRoute from "./utils/ProtectedRoute";
 import SearchPage from "./pages/SearchPage";
 import UserProfilePage from "./components/UserProfilePage";
+
+// Admin Pages & Layouts
+import AdminLayout from "./layouts/AdminLayout";
+import Dashboard from "./pages/admin/Dashboard";
+import UserManagement from "./pages/admin/UserManagement";
+import QuizManagement from "./pages/admin/QuizManagement";
+import ProblemManagement from "./pages/admin/ProblemManagement";
+
+// Protection Utilities
+import ProtectedRoute from "./utils/ProtectedRoute";
+import AdminRoute from "./utils/AdminRoute";
+import QuizArena from "./components/quizz/QuizArena";
+import MissionDebrief from "./components/quizz/MissionDebrief";
 
 function App() {
   const location = useLocation();
@@ -31,7 +45,7 @@ function App() {
     }
   }, [dispatch]);
 
-  const validPaths = [
+  const userPaths = [
     "/",
     "/profile",
     "/search",
@@ -41,18 +55,18 @@ function App() {
     "/profile/:id",
   ];
 
-  const isNavBarVisible = validPaths.some((path) =>
+  const isNavBarVisible = userPaths.some((path) =>
     matchPath({ path, end: true }, location.pathname),
   );
 
   return (
-    <div className="w-full min-h-screen bg-background text-foreground transition-colors duration-300">
+    <div className="w-full min-h-screen bg-[var(--color-background)] text-[var(--text-color-primary)] transition-colors duration-300">
       {isNavBarVisible && <NavBar />}
 
       <Routes>
+        {/* --- Public & User Routes --- */}
         <Route path="/" element={<Home />} />
         <Route path="/compiler" element={<Compiler />} />
-
         <Route
           path="/profile"
           element={
@@ -61,7 +75,6 @@ function App() {
             </ProtectedRoute>
           }
         />
-
         <Route
           path="/profile/:id"
           element={
@@ -86,6 +99,16 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route path="/quiz-arena/:id" element={<QuizArena />} />
+        <Route
+          path="/mission-debrief"
+          element={
+            <ProtectedRoute>
+              <MissionDebrief />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/leetcode"
           element={
@@ -94,6 +117,21 @@ function App() {
             </ProtectedRoute>
           }
         />
+
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminLayout />
+            </AdminRoute>
+          }
+        >
+          <Route index element={<Dashboard />} />
+          <Route path="dashboard" element={<Dashboard />} />
+          <Route path="users" element={<UserManagement />} />
+          <Route path="quizzes" element={<QuizManagement />} />
+          <Route path="problems" element={<ProblemManagement />} />
+        </Route>
 
         <Route path="*" element={<NotFound />} />
       </Routes>

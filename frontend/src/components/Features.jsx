@@ -65,7 +65,7 @@ function Features() {
             Everything You Need to <br />
             <span className="text-(--color-primary)">Code Together</span>
           </h2>
-          <p className="text-secondary font-medium max-w-2xl mx-auto text-lg">
+          <p className="text-secondary font-medium max-w-2xl mx-auto text-md">
             Professional-grade tools designed for seamless collaboration,
             interactive learning, and rapid development.
           </p>
@@ -94,7 +94,6 @@ function Features() {
                   {feature.desc}
                 </p>
 
-               
                 <div className="mt-6 w-8 h-1 bg-(--border-color-secondary) rounded-full group-hover:w-16 group-hover:bg-primary transition-all duration-500"></div>
               </div>
             );

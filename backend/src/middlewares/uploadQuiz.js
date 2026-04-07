@@ -2,17 +2,17 @@ import multer from "multer";
 import { CloudinaryStorage } from "multer-storage-cloudinary";
 import { cloudinary } from "../config/cloudinary.js";
 
-const avatarStorage = new CloudinaryStorage({
+const quizStorage = new CloudinaryStorage({
   cloudinary,
   params: {
-    folder: "avatars",
+    folder: "orbitoncx/quizzes",
     allowed_formats: ["jpg", "png", "jpeg", "webp"],
   },
 });
 
-const uploadAvatar = multer({
-  storage: avatarStorage,
-  limits: { fileSize: 2 * 1024 * 1024 },
+const uploadQuiz = multer({
+  storage: quizStorage,
+  limits: { fileSize: 3 * 1024 * 1024 }, // 3MB limit
 });
 
-export default uploadAvatar;
+export default uploadQuiz;

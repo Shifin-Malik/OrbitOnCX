@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import otpGenerator from "otp-generator";
 import axios from "axios";
 
-import User from "../../models/userModel.js";
+import User from "../../models/UserModel.js";
 import redisClient from "../../config/redis.js";
 import { redisKeys } from "../../utlis/redisKeys.js";
 import { sendEmail } from "../../utlis/sendEmail.js";
@@ -131,7 +131,6 @@ const clearLoginAttempts = async (email) => {
   await redisClient.del(redisKeys.loginBlock(email));
 };
 
-
 export const registerUser = asyncHandler(async (req, res) => {
   const { name, email, password } = req.body;
 
@@ -242,7 +241,6 @@ export const registerUser = asyncHandler(async (req, res) => {
   });
 });
 
-
 export const verifyEmail = asyncHandler(async (req, res) => {
   const { email, otp } = req.body;
   const normalizedEmail = normalizeEmail(email);
@@ -289,7 +287,6 @@ export const verifyEmail = asyncHandler(async (req, res) => {
   });
 });
 
-
 export const loginUser = asyncHandler(async (req, res) => {
   const { email, password } = req.body;
   const normalizedEmail = normalizeEmail(email);
@@ -305,14 +302,16 @@ export const loginUser = asyncHandler(async (req, res) => {
     throw new Error("Password must be at least 6 characters");
   }
 
-  const isBlocked = await redisClient.get(
+  
+  const isBlockedByAttempts = await redisClient.get(
     redisKeys.loginBlock(normalizedEmail),
   );
-  if (isBlocked) {
+  if (isBlockedByAttempts) {
     res.status(429);
     throw new Error("Too many failed attempts. Please try again later");
   }
 
+ 
   const user = await User.findOne({ email: normalizedEmail }).select(
     "+password",
   );
@@ -323,13 +322,16 @@ export const loginUser = asyncHandler(async (req, res) => {
     throw new Error("Invalid credentials");
   }
 
+  
   checkBlockedUser(user, res);
 
+ 
   if (user.authProvider === "google") {
     res.status(400);
     throw new Error("This account uses Google sign-in");
   }
 
+  
   const isPasswordMatched = await bcrypt.compare(password, user.password);
 
   if (!isPasswordMatched) {
@@ -338,23 +340,34 @@ export const loginUser = asyncHandler(async (req, res) => {
     throw new Error("Invalid credentials");
   }
 
+ 
   if (!user.isVerified) {
     res.status(403);
     throw new Error("Please verify your email first");
   }
 
+ 
   await clearLoginAttempts(normalizedEmail);
 
+ 
   const { refreshToken } = generateTokens(res, user._id, user.role);
+
 
   await setRefreshTokenInRedis(user._id.toString(), refreshToken, deviceId);
 
+ 
   res.status(200).json({
     success: true,
     message: "Login successful",
+    user: {
+      _id: user._id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      avatar: user.avatar,
+    },
   });
 });
-
 
 export const forgotPassword = asyncHandler(async (req, res) => {
   const { email } = req.body;
@@ -436,8 +449,6 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   });
 });
 
-
-
 export const resetPassword = asyncHandler(async (req, res) => {
   const { email, otp, newPassword } = req.body;
   const normalizedEmail = normalizeEmail(email);
@@ -494,7 +505,6 @@ export const resetPassword = asyncHandler(async (req, res) => {
   });
 });
 
-
 export const logoutUser = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.refreshToken;
   const deviceId = getDeviceId(req);
@@ -517,8 +527,6 @@ export const logoutUser = asyncHandler(async (req, res) => {
     message: "Logged out successfully",
   });
 });
-
-
 
 export const refreshAccessToken = asyncHandler(async (req, res) => {
   const refreshToken = req.cookies?.refreshToken;
@@ -577,9 +585,9 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
   });
 });
 
-
 export const googleAuth = asyncHandler(async (req, res) => {
   const { access_token } = req.body;
+  console.log(access_token)
   const deviceId = getDeviceId(req);
 
   if (!access_token || typeof access_token !== "string") {

@@ -1,5 +1,5 @@
 import jwt from "jsonwebtoken";
-import User from "../models/userModel.js";
+import User from "../models/UserModel.js";
 
 export const protect = async (req, res, next) => {
   const token = req.cookies?.accessToken;
@@ -33,5 +33,16 @@ export const protect = async (req, res, next) => {
     }
 
     return res.status(401).json({ success: false, message: "Invalid token" });
+  }
+};
+
+export const isAdmin = (req, res, next) => {
+  if (req.user && req.user.role === "admin") {
+    next();
+  } else {
+    res.status(403).json({
+      success: false,
+      message: "Access denied. Admins only.",
+    });
   }
 };

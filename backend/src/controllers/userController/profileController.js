@@ -1,6 +1,6 @@
 import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
-import User from "../../models/userModel.js";
+import User from "../../models/UserModel.js";
 
 const EXCLUDE_FIELDS =
   "-password -otp -otpExpire -resetPasswordToken -resetPasswordExpire -__v";
@@ -36,18 +36,15 @@ export const getProfile = asyncHandler(async (req, res) => {
 });
 
 export const updateProfile = asyncHandler(async (req, res) => {
+  console.log("--- DEBUG START ---");
+  console.log("Req Body:", req.body);
+  console.log("Req File:", req.file);
+  console.log("--- DEBUG END ---");
   const userId = req.user._id;
-
   const updateData = { ...req.body };
 
   delete updateData.oldPassword;
   delete updateData.newPassword;
-
-  for (let key in updateData) {
-    if (typeof updateData[key] === "string") {
-      updateData[key] = updateData[key].trim();
-    }
-  }
 
   if (req.file) {
     updateData.avatar = req.file.path;
@@ -55,19 +52,15 @@ export const updateProfile = asyncHandler(async (req, res) => {
 
   if (req.body.newPassword) {
     const user = await User.findById(userId).select("+password");
-
     if (!req.body.oldPassword) {
       res.status(400);
       throw new Error("Current password is required");
     }
-
     const isMatch = await bcrypt.compare(req.body.oldPassword, user.password);
-
     if (!isMatch) {
       res.status(401);
       throw new Error("Current password incorrect");
     }
-
     const salt = await bcrypt.genSalt(10);
     updateData.password = await bcrypt.hash(req.body.newPassword, salt);
   }
@@ -75,7 +68,10 @@ export const updateProfile = asyncHandler(async (req, res) => {
   const updatedUser = await User.findByIdAndUpdate(
     userId,
     { $set: updateData },
-    { new: true, runValidators: true },
+    {
+      returnDocument: "after",
+      runValidators: true,
+    },
   ).select("-password");
 
   res.status(200).json({
@@ -148,8 +144,8 @@ export const toggleFollow = asyncHandler(async (req, res) => {
 export const getUserById = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id)
     .select(EXCLUDE_FIELDS)
-    .populate("followers", "name profilePic avatar bio") 
-    .populate("following", "name profilePic avatar bio");
+    .populate("followers", "name avatar bio")
+    .populate("following", "name avatar bio");
 
   if (!user) {
     res.status(404);

@@ -6,8 +6,8 @@ export const generateAccessToken = (id, role) => {
   });
 };
 
-export const generateRefreshToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_REFRESH_SECRET, {
+export const generateRefreshToken = (id, role) => {
+  return jwt.sign({ id, role }, process.env.JWT_REFRESH_SECRET, {
     expiresIn: "7d",
   });
 };
@@ -24,10 +24,13 @@ export const getCookieOptions = () => {
 };
 
 export const generateTokens = (res, id, role) => {
+  if (!process.env.JWT_ACCESS_SECRET || !process.env.JWT_REFRESH_SECRET) {
+    throw new Error("JWT secrets are missing in environment variables");
+  }
   if (!res) throw new Error("Response object is required");
 
   const accessToken = generateAccessToken(id, role);
-  const refreshToken = generateRefreshToken(id);
+  const refreshToken = generateRefreshToken(id, role);
 
   const cookieOptions = getCookieOptions();
 

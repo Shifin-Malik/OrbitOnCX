@@ -1,7 +1,12 @@
 import React from "react";
+import QuizDash from "../components/quizz/QuizDash";
 
 function Quiz() {
-  return <div>Quiz</div>;
+  return (
+    <div>
+      <QuizDash />
+    </div>
+  );
 }
 
 export default Quiz;

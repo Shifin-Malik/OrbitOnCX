@@ -1,11 +1,10 @@
 @import "tailwindcss";
 @plugin "tailwind-scrollbar-hide";
 
-/* Hide scrollbar but keep scroll */
 body {
   @apply scrollbar-hide;
-  background-color: #f8fafc;
-  color: #1e293b;
+  background-color: var(--color-background);
+  color: var(--text-color-primary);
   overflow-y: scroll;
 }
 
@@ -24,6 +23,11 @@ body::-webkit-scrollbar {
 
   --color-accent: #10b981;
   --color-accent-glow: rgba(16, 185, 129, 0.05);
+
+  --color-success: #10b981;
+  --color-success-glow: rgba(16, 185, 129, 0.12);
+  --color-danger: #ef4444;
+  --color-danger-glow: rgba(239, 68, 68, 0.12);
 
   --text-color-primary: #064e3b;
   --text-color-secondary: #374151;
@@ -44,6 +48,11 @@ body::-webkit-scrollbar {
 
   --color-accent: #34d399;
   --color-accent-glow: rgba(52, 211, 153, 0.15);
+
+  --color-success: #34d399;
+  --color-success-glow: rgba(52, 211, 153, 0.22);
+  --color-danger: #f87171;
+  --color-danger-glow: rgba(248, 113, 113, 0.22);
 
   --text-color-primary: #ecfdf5;
   --text-color-secondary: #94a3b8;

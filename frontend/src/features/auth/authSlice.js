@@ -283,20 +283,22 @@ const authSlice = createSlice({
           );
         }
 
+        
         if (state.user) {
           const following = state.user.following || [];
           const targetIdStr = targetUserId.toString();
 
           if (data.isFollowing) {
+          
             const exists = following.some(
-              (id) => id.toString() === targetIdStr,
+              (id) => (id._id || id).toString() === targetIdStr,
             );
             if (!exists) {
               state.user.following = [...following, targetUserId];
             }
           } else {
             state.user.following = following.filter(
-              (id) => id.toString() !== targetIdStr,
+              (id) => (id._id || id).toString() !== targetIdStr,
             );
           }
         }
@@ -307,12 +309,32 @@ const authSlice = createSlice({
         ) {
           state.selectedUser.isFollowing = data.isFollowing;
 
+
           if (state.selectedUser.stats) {
             const currentFollowers =
               state.selectedUser.stats.followerCount || 0;
             state.selectedUser.stats.followerCount = data.isFollowing
               ? currentFollowers + 1
               : Math.max(0, currentFollowers - 1);
+          }
+
+          if (data.isFollowing) {
+
+            const currentUserData = {
+              _id: state.user._id,
+              name: state.user.name,
+              profilePic: state.user.profilePic || state.user.avatar,
+            };
+            state.selectedUser.followers = [
+              ...(state.selectedUser.followers || []),
+              currentUserData,
+            ];
+          } else {
+            state.selectedUser.followers = (
+              state.selectedUser.followers || []
+            ).filter(
+              (u) => (u._id || u).toString() !== state.user._id.toString(),
+            );
           }
         }
       })

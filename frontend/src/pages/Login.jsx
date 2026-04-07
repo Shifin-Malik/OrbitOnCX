@@ -26,10 +26,13 @@ import {
   resetPassword,
   resetAuthState,
 } from "../features/auth/authSlice";
+import { useNavigate } from "react-router-dom";
 
 function Login({ isOpen, onClose, initialMode = "signin" }) {
   const dispatch = useDispatch();
-  const { loading, isSuccess, isError, message } = useSelector(
+  const navigate = useNavigate();
+
+  const { loading, isSuccess, isError, message, user } = useSelector(
     (state) => state.auth,
   );
 
@@ -55,35 +58,41 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
   };
 
   useEffect(() => {
-  if (isError && message) {
-    toast.error(message);
-    dispatch(resetAuthState());
-  }
-
-  if (isSuccess && message) {
-    toast.success(message);
-
-    if (mode === "signup") {
-      setMode("verify");
-    } else if (mode === "forgot") {
-      setMode("reset");
-    } else if (mode === "verify") {
-      dispatch(login({ email: formData.email, password: formData.password }));
-      setMode("signin");
-    } else if (mode === "reset") {
-      setMode("signin");
-      setFormData((prev) => ({ ...prev, otp: "", password: "" }));
-    } else if (mode === "signin") {
-      dispatch(resetCompilerState());
+    if (isError && message) {
+      toast.error(message);
       dispatch(resetAuthState());
-      onClose();
-      window.location.reload(); 
     }
-    if (mode !== "signin") {
+
+    if (isSuccess) {
+      if (message) toast.success(message);
+
+      if (mode === "signup") {
+        setMode("verify");
+      } else if (mode === "forgot") {
+        setMode("reset");
+      } else if (mode === "verify") {
+        setMode("signin");
+      } else if (mode === "reset") {
+        setMode("signin");
+        setFormData((prev) => ({ ...prev, otp: "", password: "" }));
+      } else if (mode === "signin") {
+  
+        dispatch(resetCompilerState());
         dispatch(resetAuthState());
+        onClose();
+
+        if (user?.role === "admin") {
+          navigate("/admin/dashboard");
+        } else {
+          navigate("/");
+        }
+      }
+
+      if (mode !== "signin") {
+        dispatch(resetAuthState());
+      }
     }
-  }
-}, [isError, isSuccess, message, mode, dispatch, onClose, formData]);
+  }, [isError, isSuccess, message, mode, dispatch, onClose, user, navigate]);
 
   useEffect(() => {
     if (isOpen) {
