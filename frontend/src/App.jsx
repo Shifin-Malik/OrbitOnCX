@@ -8,7 +8,8 @@ import Home from "./pages/Home";
 import NavBar from "./components/NavBar";
 import ProfilePage from "./pages/ProfilePage";
 import Quiz from "./pages/Quiz";
-import ProblemListUI from "./pages/ProblemPage";
+import ProblemListPage from "./pages/problems/ProblemListPage.jsx";
+import ProblemSolvePage from "./pages/problems/ProblemSolvePage.jsx";
 import Compiler from "./pages/Compiler";
 import NotFound from "./pages/NotFound";
 import SearchPage from "./pages/SearchPage";
@@ -51,6 +52,7 @@ function App() {
     "/search",
     "/quiz",
     "/leetcode",
+    "/leetcode/:slug",
     "/compiler",
     "/profile/:id",
   ];
@@ -113,7 +115,15 @@ function App() {
           path="/leetcode"
           element={
             <ProtectedRoute>
-              <ProblemListUI />
+              <ProblemListPage />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/leetcode/:slug"
+          element={
+            <ProtectedRoute>
+              <ProblemSolvePage />
             </ProtectedRoute>
           }
         />
