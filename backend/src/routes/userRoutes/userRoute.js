@@ -41,6 +41,12 @@ import {
   getDraft,
   saveDraft,
 } from "../../controllers/userController/compilerController.js";
+import {
+  getProblemStats,
+  getActivity,
+  getStreak,
+  getRecentSubmissions,
+} from "../../controllers/userController/problemActivityController.js";
 
 const router = express.Router();
 
@@ -75,5 +81,11 @@ router.put("/update/:id", protect, updateQuiz);
 router.post("/execute", executeCode);
 router.post("/save-draft", protect, saveDraft);
 router.get("/get-draft", protect, getDraft);
+
+// --- Problems Profile Routes ---
+router.get("/profile/problem-stats", protect, getProblemStats);
+router.get("/profile/activity", protect, getActivity);
+router.get("/profile/streak", protect, getStreak);
+router.get("/profile/submissions", protect, getRecentSubmissions);
 
 export default router;

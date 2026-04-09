@@ -7,7 +7,8 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node src/server.js",
     "dev": "nodemon src/server.js",
-    "make-admin": "node src/scripts/makeAdmin.js"
+    "make-admin": "node src/scripts/makeAdmin.js",
+    "seed-problems": "node src/scripts/seedProblems.js"
   },
   "keywords": [],
   "type": "module",
@@ -34,6 +35,7 @@
     "nodemon": "^3.1.14",
     "openai": "^6.32.0",
     "otp-generator": "^4.0.1",
-    "redis": "^5.11.0"
+    "redis": "^5.11.0",
+    "socket.io": "^4.8.3"
   }
 }

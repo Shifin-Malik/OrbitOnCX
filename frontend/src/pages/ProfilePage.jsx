@@ -5,6 +5,7 @@ import toast, { Toaster } from "react-hot-toast";
 import { FaGithub, FaLinkedin, FaLock, FaUpload } from "react-icons/fa";
 
 import ActivityHeatmap from "../components/ActivityHeatmap";
+import StreakCard from "../components/profile/StreakCard.jsx";
 import Modal from "../components/common/Modal";
 import InputField from "../components/common/InputField";
 import ProfileSidebar from "../components/profile/ProfileSidebar";
@@ -15,6 +16,11 @@ import {
   logout,
   resetAuthState,
 } from "../features/auth/authSlice";
+import {
+  fetchActivity,
+  fetchStreak,
+  fetchProblemStats,
+} from "../features/activity/activitySlice.js";
 
 const AVATAR_STYLES = [
   "avataaars",
@@ -29,6 +35,7 @@ const AVATAR_STYLES = [
 
 function ProfilePage() {
   const { user } = useSelector((state) => state.auth);
+  const { activities, streak } = useSelector((state) => state.activity);
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -48,6 +55,12 @@ function ProfilePage() {
     oldPassword: "",
     newPassword: "",
   });
+
+  React.useEffect(() => {
+    dispatch(fetchActivity());
+    dispatch(fetchStreak());
+    dispatch(fetchProblemStats());
+  }, [dispatch]);
 
   const toggleModal = useCallback((type, val) => {
     setModals((p) => ({ ...p, [type]: val }));
@@ -104,7 +117,8 @@ function ProfilePage() {
 
         <main className="lg:col-span-8 space-y-2">
           <ProfileStats user={user} />
-          <ActivityHeatmap />
+          <StreakCard streak={streak} />
+          <ActivityHeatmap userActivities={activities} />
         </main>
       </div>
 
