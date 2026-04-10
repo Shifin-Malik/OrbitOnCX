@@ -73,10 +73,21 @@ const removeFromTree = (nodes, id) => {
     }));
 };
 
+const treeHasId = (nodes, id) => {
+  if (!id) return false;
+  const idStr = id.toString();
+  for (const n of nodes || []) {
+    if (n?._id?.toString?.() === idStr) return true;
+    if (Array.isArray(n.replies) && treeHasId(n.replies, idStr)) return true;
+  }
+  return false;
+};
+
 const insertReply = (nodes, reply) => {
   return nodes.map((n) => {
     if (n._id === reply.parentComment) {
       const replies = Array.isArray(n.replies) ? n.replies : [];
+      if (replies.some((r) => r?._id === reply._id)) return n;
       return { ...n, replies: [...replies, { ...reply, replies: [] }] };
     }
     return {
@@ -98,9 +109,11 @@ const discussionSlice = createSlice({
   initialState,
   reducers: {
     socketNewComment: (state, { payload }) => {
+      if (!payload?._id || treeHasId(state.comments, payload._id)) return;
       state.comments = [...state.comments, { ...payload, replies: [] }];
     },
     socketNewReply: (state, { payload }) => {
+      if (!payload?._id || treeHasId(state.comments, payload._id)) return;
       state.comments = insertReply(state.comments, payload);
     },
     socketDeleted: (state, { payload }) => {
@@ -130,8 +143,10 @@ const discussionSlice = createSlice({
         state.posting = true;
         state.error = null;
       })
-      .addCase(postComment.fulfilled, (state) => {
+      .addCase(postComment.fulfilled, (state, { payload }) => {
         state.posting = false;
+        if (!payload?._id || treeHasId(state.comments, payload._id)) return;
+        state.comments = [...state.comments, { ...payload, replies: [] }];
       })
       .addCase(postComment.rejected, (state, { payload }) => {
         state.posting = false;
@@ -141,8 +156,10 @@ const discussionSlice = createSlice({
         state.posting = true;
         state.error = null;
       })
-      .addCase(replyComment.fulfilled, (state) => {
+      .addCase(replyComment.fulfilled, (state, { payload }) => {
         state.posting = false;
+        if (!payload?._id || treeHasId(state.comments, payload._id)) return;
+        state.comments = insertReply(state.comments, payload);
       })
       .addCase(replyComment.rejected, (state, { payload }) => {
         state.posting = false;

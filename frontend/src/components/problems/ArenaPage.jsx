@@ -13,20 +13,11 @@ const ArenaPage = () => {
   const [selectedProblem, setSelectedProblem] = useState(null);
   const [activeFilter, setActiveFilter] = useState("All");
   const [isFilterOpen, setIsFilterOpen] = useState(false);
-  const [theme, setTheme] = useState("dark"); // Default theme
+  
 
   const filters = ["All", "Easy", "Medium", "Hard"];
 
-  // Toggle Theme logic
-  const toggleTheme = () => {
-    const newTheme = theme === "dark" ? "light" : "dark";
-    setTheme(newTheme);
-    document.documentElement.className = newTheme; 
-  };
-
-  useEffect(() => {
-    document.documentElement.className = theme;
-  }, [theme]);
+  
 
   return (
     <div className="min-h-screen bg-[var(--color-background)] text-[var(--text-color-primary)] transition-colors duration-500">

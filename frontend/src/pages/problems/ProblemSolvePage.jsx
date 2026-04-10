@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
 import Editor from "@monaco-editor/react";
@@ -30,10 +30,38 @@ const normalizeStarter = (starterCode, lang) => {
   return starterCode?.[lang] || "";
 };
 
+const useMediaQuery = (query) => {
+  const getMatches = () => {
+    if (typeof window === "undefined") return false;
+    return window.matchMedia(query).matches;
+  };
+
+  const [matches, setMatches] = useState(getMatches);
+
+  useEffect(() => {
+    const media = window.matchMedia(query);
+    const handler = () => setMatches(media.matches);
+    handler();
+    media.addEventListener("change", handler);
+    return () => media.removeEventListener("change", handler);
+  }, [query]);
+
+  return matches;
+};
+
+const LAYOUT_STORAGE_KEY = "problemSolveLayout:v1";
+const VERTICAL_HANDLE_PX = 12;
+const HORIZONTAL_HANDLE_PX = 10;
+const MIN_LEFT_PX = 320;
+const MIN_RIGHT_PX = 460;
+const MIN_EDITOR_PX = 220;
+const MIN_OUTPUT_PX = 180;
+
 const ProblemSolvePage = () => {
   const { slug } = useParams();
   const navigate = useNavigate();
   const dispatch = useDispatch();
+  const isLgUp = useMediaQuery("(min-width: 1024px)");
 
   const { activeProblem, loadingProblem, problemError } = useSelector(
     (s) => s.problems,
@@ -54,6 +82,101 @@ const ProblemSolvePage = () => {
   const [editorTheme, setEditorTheme] = useState(() =>
     document.documentElement.classList.contains("dark") ? "vs-dark" : "light",
   );
+
+  const layoutRootRef = useRef(null);
+  const rightBodyRef = useRef(null);
+  const editorRef = useRef(null);
+
+  const [leftWidthPx, setLeftWidthPx] = useState(null);
+  const [editorHeightPx, setEditorHeightPx] = useState(null);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(LAYOUT_STORAGE_KEY);
+      if (!raw) return;
+      const parsed = JSON.parse(raw);
+      if (typeof parsed?.leftWidthPx === "number") {
+        setLeftWidthPx(parsed.leftWidthPx);
+      }
+      if (typeof parsed?.editorHeightPx === "number") {
+        setEditorHeightPx(parsed.editorHeightPx);
+      }
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isLgUp) return;
+    const t = setTimeout(() => {
+      try {
+        localStorage.setItem(
+          LAYOUT_STORAGE_KEY,
+          JSON.stringify({ leftWidthPx, editorHeightPx }),
+        );
+      } catch {
+        // ignore storage errors
+      }
+    }, 250);
+    return () => clearTimeout(t);
+  }, [isLgUp, leftWidthPx, editorHeightPx]);
+
+  const clampLayoutToViewport = () => {
+    if (!isLgUp) return;
+    const root = layoutRootRef.current;
+    const rightBody = rightBodyRef.current;
+    if (!root || !rightBody) return;
+
+    const rootWidth = root.clientWidth || 0;
+    const maxLeft = Math.max(
+      MIN_LEFT_PX,
+      rootWidth - MIN_RIGHT_PX - VERTICAL_HANDLE_PX,
+    );
+
+    setLeftWidthPx((prev) => {
+      const fallback = Math.min(maxLeft, Math.max(MIN_LEFT_PX, 520));
+      const next =
+        typeof prev === "number"
+          ? Math.min(maxLeft, Math.max(MIN_LEFT_PX, prev))
+          : fallback;
+      return next;
+    });
+
+    const bodyHeight = rightBody.clientHeight || 0;
+    const maxEditor = Math.max(
+      MIN_EDITOR_PX,
+      bodyHeight - MIN_OUTPUT_PX - HORIZONTAL_HANDLE_PX,
+    );
+
+    setEditorHeightPx((prev) => {
+      const fallback = Math.min(
+        maxEditor,
+        Math.max(MIN_EDITOR_PX, Math.floor(bodyHeight * 0.62)),
+      );
+      const next =
+        typeof prev === "number"
+          ? Math.min(maxEditor, Math.max(MIN_EDITOR_PX, prev))
+          : fallback;
+      return next;
+    });
+  };
+
+  useEffect(() => {
+    clampLayoutToViewport();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLgUp]);
+
+  useEffect(() => {
+    if (!isLgUp) return;
+    const onResize = () => clampLayoutToViewport();
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLgUp]);
+
+  useEffect(() => {
+    editorRef.current?.layout?.();
+  }, [leftWidthPx, editorHeightPx]);
 
   useEffect(() => {
     dispatch(fetchProblemBySlug(slug));
@@ -163,10 +286,82 @@ const ProblemSolvePage = () => {
     );
   }
 
+  const startVerticalResize = (e) => {
+    if (!isLgUp) return;
+    const root = layoutRootRef.current;
+    if (!root) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const startLeft =
+      typeof leftWidthPx === "number" ? leftWidthPx : MIN_LEFT_PX;
+
+    const onMove = (ev) => {
+      const rootWidth = root.clientWidth || 0;
+      const maxLeft = Math.max(
+        MIN_LEFT_PX,
+        rootWidth - MIN_RIGHT_PX - VERTICAL_HANDLE_PX,
+      );
+      const next = startLeft + (ev.clientX - startX);
+      setLeftWidthPx(Math.min(maxLeft, Math.max(MIN_LEFT_PX, next)));
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  };
+
+  const startHorizontalResize = (e) => {
+    if (!isLgUp) return;
+    const body = rightBodyRef.current;
+    if (!body) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startY = e.clientY;
+    const startEditor =
+      typeof editorHeightPx === "number" ? editorHeightPx : MIN_EDITOR_PX;
+
+    const onMove = (ev) => {
+      const bodyHeight = body.clientHeight || 0;
+      const maxEditor = Math.max(
+        MIN_EDITOR_PX,
+        bodyHeight - MIN_OUTPUT_PX - HORIZONTAL_HANDLE_PX,
+      );
+      const next = startEditor + (ev.clientY - startY);
+      setEditorHeightPx(Math.min(maxEditor, Math.max(MIN_EDITOR_PX, next)));
+    };
+
+    const onUp = () => {
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+    };
+
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp, { once: true });
+  };
+
   return (
-    <div className="min-h-screen bg-[var(--color-background)] text-[var(--text-color-primary)] pt-20">
-      <div className="h-[calc(100vh-5rem)] max-w-[1400px] mx-auto px-3 md:px-6">
-        <div className="h-full grid grid-cols-1 lg:grid-cols-2 gap-3">
+    <div className="min-h-screen bg-[var(--color-background)] text-[var(--text-color-primary)] pt-2">
+      <div className="h-[calc(100vh-5rem)] max-w-[1400px] mx-auto px-3 md:px-2">
+        <div
+          ref={layoutRootRef}
+          className="h-full grid grid-cols-1 lg:grid-cols-[auto_12px_1fr]"
+          style={
+            isLgUp && typeof leftWidthPx === "number"
+              ? {
+                  gridTemplateColumns: `${leftWidthPx}px ${VERTICAL_HANDLE_PX}px 1fr`,
+                }
+              : undefined
+          }
+        >
           {/* Left */}
           <div className="h-full bg-[var(--color-background-soft)] border border-[var(--border-color-primary)] rounded-3xl overflow-hidden flex flex-col">
             <div className="px-5 py-4 border-b border-[var(--border-color-primary)] bg-[var(--color-background-elevated)] flex items-center justify-between">
@@ -225,11 +420,10 @@ const ProblemSolvePage = () => {
                             Example {idx + 1}
                           </div>
                           <pre className="mt-2 text-xs font-mono whitespace-pre-wrap">
-Input:
-{ex.input}
-
-Output:
-{ex.output}
+                            Input:
+                            {ex.input}
+                            Output:
+                            {ex.output}
                           </pre>
                           {ex.explanation ? (
                             <div className="mt-2 text-[12px] text-[var(--text-color-secondary)]">
@@ -275,6 +469,20 @@ Output:
             </div>
           </div>
 
+          {/* Vertical Resize Handle (desktop only) */}
+          <div className="hidden lg:flex items-stretch justify-center">
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              tabIndex={0}
+              onPointerDown={startVerticalResize}
+              className="w-full cursor-col-resize select-none flex items-center justify-center"
+              title="Resize panels"
+            >
+              <div className="w-[2px] h-[92%] rounded-full bg-[var(--border-color-primary)] opacity-60 hover:opacity-100 transition-opacity" />
+            </div>
+          </div>
+
           {/* Right */}
           <div className="h-full bg-[var(--color-background-soft)] border border-[var(--border-color-primary)] rounded-3xl overflow-hidden flex flex-col">
             <div className="px-5 py-4 border-b border-[var(--border-color-primary)] bg-[var(--color-background-elevated)] flex items-center justify-between">
@@ -313,14 +521,28 @@ Output:
               </div>
             </div>
 
-            <div className="flex-1 grid grid-rows-[1fr_260px]">
-              <div className="bg-[#050505]">
+            <div
+              ref={rightBodyRef}
+              className="flex-1 grid"
+              style={
+                isLgUp && typeof editorHeightPx === "number"
+                  ? {
+                      gridTemplateRows: `${editorHeightPx}px ${HORIZONTAL_HANDLE_PX}px 1fr`,
+                    }
+                  : { gridTemplateRows: "1fr 260px" }
+              }
+            >
+              <div className="bg-[#050505] overflow-hidden">
                 <Editor
                   height="100%"
                   theme={editorTheme}
                   language={language === "cpp" ? "cpp" : language}
                   value={code}
                   onChange={(v) => setCode(v || "")}
+                  onMount={(editor) => {
+                    editorRef.current = editor;
+                    queueMicrotask(() => editor.layout());
+                  }}
                   options={{
                     fontSize: 14,
                     fontFamily: "'JetBrains Mono', monospace",
@@ -335,13 +557,29 @@ Output:
                 />
               </div>
 
+              {/* Horizontal Resize Handle (desktop only) */}
+              <div className="hidden lg:flex items-center justify-center bg-[var(--color-background-soft)]">
+                <div
+                  role="separator"
+                  aria-orientation="horizontal"
+                  tabIndex={0}
+                  onPointerDown={startHorizontalResize}
+                  className="w-full h-full cursor-row-resize select-none flex items-center justify-center"
+                  title="Resize editor/output"
+                >
+                  <div className="h-[2px] w-[92%] rounded-full bg-[var(--border-color-primary)] opacity-60 hover:opacity-100 transition-opacity" />
+                </div>
+              </div>
+
               <div className="border-t border-[var(--border-color-primary)] bg-[var(--color-background-elevated)] overflow-hidden flex flex-col">
                 <div className="px-5 py-3 border-b border-[var(--border-color-primary)] flex items-center justify-between">
                   <div className="text-[10px] font-black uppercase tracking-widest text-[var(--text-color-muted)]">
                     Output
                   </div>
                   <div className="text-[10px] font-mono text-[var(--text-color-muted)]">
-                    {error ? "error" : output?.status || submitResult?.status || "idle"}
+                    {error
+                      ? "error"
+                      : output?.status || submitResult?.status || "idle"}
                   </div>
                 </div>
                 <div className="flex-1 overflow-y-auto p-4 font-mono text-xs">
@@ -361,4 +599,3 @@ Output:
 };
 
 export default ProblemSolvePage;
-
