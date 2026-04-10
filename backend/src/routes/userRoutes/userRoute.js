@@ -47,6 +47,10 @@ import {
   getStreak,
   getRecentSubmissions,
 } from "../../controllers/userController/problemActivityController.js";
+import {
+  getActiveUsersCount,
+  heartbeat,
+} from "../../controllers/userController/presenceController.js";
 
 const router = express.Router();
 
@@ -87,5 +91,9 @@ router.get("/profile/problem-stats", protect, getProblemStats);
 router.get("/profile/activity", protect, getActivity);
 router.get("/profile/streak", protect, getStreak);
 router.get("/profile/submissions", protect, getRecentSubmissions);
+
+// --- Presence / Active Users ---
+router.patch("/heartbeat", protect, heartbeat);
+router.get("/active-count", getActiveUsersCount);
 
 export default router;

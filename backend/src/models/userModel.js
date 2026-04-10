@@ -80,6 +80,7 @@ const userSchema = new mongoose.Schema(
     longestStreak: { type: Number, default: 0 },
     lastSolvedDayKey: { type: String, default: null }, // YYYY-MM-DD (UTC)
     lastActivity: { type: Date },
+    lastSeenAt: { type: Date, default: null, index: true },
 
     problemsSolved: {
       easy: [{ type: mongoose.Schema.Types.ObjectId, ref: "Problem" }],

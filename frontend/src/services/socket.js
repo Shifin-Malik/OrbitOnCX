@@ -11,3 +11,10 @@ export const createDiscussionSocket = () => {
   });
 };
 
+export const createAppSocket = () => {
+  return io(SOCKET_URL, {
+    withCredentials: true,
+    transports: ["websocket"],
+    autoConnect: true,
+  });
+};

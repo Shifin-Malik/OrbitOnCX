@@ -72,3 +72,7 @@ export const deleteDiscussionAPI = (commentId) =>
 export const getProblemStatsAPI = () => API.get("/users/profile/problem-stats");
 export const getActivityAPI = () => API.get("/users/profile/activity");
 export const getStreakAPI = () => API.get("/users/profile/streak");
+
+// --- Presence / Active Users ---
+export const sendHeartbeatAPI = () => API.patch("/users/heartbeat");
+export const getActiveUsersCountAPI = () => API.get("/users/active-count");

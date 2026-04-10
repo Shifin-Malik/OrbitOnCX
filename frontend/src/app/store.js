@@ -20,6 +20,7 @@ import problemReducer from "../features/problems/problemSlice.js";
 import submissionReducer from "../features/submissions/submissionSlice.js";
 import discussionReducer from "../features/discussions/discussionSlice.js";
 import activityReducer from "../features/activity/activitySlice.js";
+import presenceReducer from "../features/presence/presenceSlice.js";
 
 const rootReducer = combineReducers({
   auth: authReducer,
@@ -30,6 +31,7 @@ const rootReducer = combineReducers({
   submissions: submissionReducer,
   discussions: discussionReducer,
   activity: activityReducer,
+  presence: presenceReducer,
 });
 
 const persistConfig = {
@@ -45,6 +47,7 @@ const persistConfig = {
     "submissions",
     "discussions",
     "activity",
+    "presence",
   ],
 };
 

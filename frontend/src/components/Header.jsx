@@ -1,7 +1,13 @@
 import React from "react";
 import { FaRocket, FaCheckCircle, FaUsers, FaTerminal } from "react-icons/fa";
 
-function Header() {
+function Header({ activeUsers, activeUsersLoading }) {
+  const activeText = activeUsersLoading
+    ? "Loading..."
+    : typeof activeUsers === "number"
+      ? `${activeUsers} online now`
+      : "- online now";
+
   return (
     <div className="relative min-h-[90vh] md:min-h-screen flex items-center justify-center overflow-hidden bg-background transition-colors duration-500 pt-20">
       <div className="relative z-10 max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-16 items-center">
@@ -99,10 +105,10 @@ function Header() {
               </div>
               <div>
                 <p className="text-[9px] text-(--color-primary) font-black uppercase tracking-widest leading-none mb-1">
-                  Active Now
+                  Active Users
                 </p>
                 <p className="text-sm font-black text-primary tracking-tight">
-                  12 Developers
+                  {activeText}
                 </p>
               </div>
             </div>
