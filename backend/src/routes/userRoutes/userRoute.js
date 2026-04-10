@@ -16,6 +16,10 @@ import {
   getProfile,
   getUserById,
   searchUsers,
+  getSearchHistory,
+  addToSearchHistory,
+  removeFromSearchHistory,
+  clearSearchHistory,
   toggleFollow,
   updateProfile,
 } from "../../controllers/userController/profileController.js";
@@ -69,6 +73,14 @@ router.get("/profile", protect, getProfile);
 router.put("/profile", protect, uploadAvatar.single("avatar"), updateProfile);
 router.get("/profile/:id", protect, getUserById);
 router.get("/search-users", protect, searchUsers);
+router.get("/search-history", protect, getSearchHistory);
+router.post("/search-history", protect, addToSearchHistory);
+router.delete(
+  "/search-history/:searchedUserId",
+  protect,
+  removeFromSearchHistory,
+);
+router.delete("/search-history", protect, clearSearchHistory);
 router.put("/follow/:id", protect, toggleFollow);
 
 // --- Quiz System Routes ---

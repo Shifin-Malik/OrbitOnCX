@@ -28,6 +28,7 @@ const ProfileSidebar = ({
     user: currentUser,
     selectedUser,
     loading,
+    followPendingByUserId,
   } = useSelector((state) => state.auth);
 
 
@@ -38,7 +39,10 @@ const ProfileSidebar = ({
 
   // Follow/Unfollow Handler
   const handleFollow = () => {
-    if (activeUser?._id) {
+    if (
+      activeUser?._id &&
+      !followPendingByUserId?.[activeUser._id?.toString()]
+    ) {
       dispatch(toggleFollowAsync(activeUser._id));
     }
   };
@@ -132,6 +136,9 @@ const ProfileSidebar = ({
           {isOtherUser ? (
             <FollowButton
               isFollowing={activeUser?.isFollowing}
+              disabled={
+                !!followPendingByUserId?.[activeUser?._id?.toString()]
+              }
               onClick={handleFollow}
             />
           ) : (
@@ -167,9 +174,10 @@ const StatRow = ({ icon, label, value, color }) => (
   </div>
 );
 
-const FollowButton = ({ isFollowing, onClick }) => (
+const FollowButton = ({ isFollowing, disabled = false, onClick }) => (
   <button
     onClick={onClick}
+    disabled={disabled}
     className={`w-full py-4 rounded-2xl font-black text-xs uppercase flex items-center justify-center gap-2 transition-all ${isFollowing ? "bg-background-elevated text-primary border border-primary" : "bg-primary text-white shadow-lg"}`}
   >
     {isFollowing ? (

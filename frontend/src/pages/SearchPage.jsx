@@ -6,6 +6,7 @@ import {
   HiLightningBolt,
   HiPlus,
   HiCheck,
+  HiX,
 } from "react-icons/hi";
 import { motion, AnimatePresence } from "framer-motion";
 import { useDispatch, useSelector } from "react-redux";
@@ -14,6 +15,10 @@ import {
   searchUsersAsync,
   clearSearchResults,
   toggleFollowAsync,
+  fetchRecentSearches,
+  saveRecentSearchUser,
+  removeRecentSearchUser,
+  clearRecentSearches,
 } from "../features/auth/authSlice";
 
 function SearchPage({ isDarkMode }) {
@@ -26,13 +31,39 @@ function SearchPage({ isDarkMode }) {
   const {
     searchResults,
     loading,
+    recentSearches,
+    recentSearchesLoading,
+    followPendingByUserId,
     user: currentUser,
   } = useSelector((state) => state.auth);
+
+  const followingIdSet = React.useMemo(() => {
+    const list = currentUser?.following || [];
+    return new Set(list.map((v) => (v?._id || v).toString()));
+  }, [currentUser?.following]);
 
   // Follow trigger handling
   const handleFollow = (e, targetUserId) => {
     e.stopPropagation();
+    if (followPendingByUserId?.[targetUserId?.toString()]) return;
     dispatch(toggleFollowAsync(targetUserId));
+  };
+
+  const handleOpenUser = async (userId) => {
+    try {
+      await dispatch(saveRecentSearchUser(userId));
+    } finally {
+      navigate(`/profile/${userId}`);
+    }
+  };
+
+  const handleRemoveRecent = (e, userId) => {
+    e.stopPropagation();
+    dispatch(removeRecentSearchUser(userId));
+  };
+
+  const handleClearRecent = () => {
+    dispatch(clearRecentSearches());
   };
 
   // Debounced search logic
@@ -49,6 +80,13 @@ function SearchPage({ isDarkMode }) {
     }, 500);
 
     return () => clearTimeout(delayDebounceFn);
+  }, [searchQuery, activeTab, dispatch]);
+
+  useEffect(() => {
+    const query = searchQuery.trim();
+    if (activeTab === "Users" && query === "") {
+      dispatch(fetchRecentSearches());
+    }
   }, [searchQuery, activeTab, dispatch]);
 
   // Clear results on tab switch
@@ -149,27 +187,120 @@ function SearchPage({ isDarkMode }) {
               <div className="flex-1 p-6 relative overflow-y-auto max-h-150 custom-scrollbar">
                 <AnimatePresence mode="wait">
                   {!searchQuery ? (
-                    <motion.div
-                      key="empty"
-                      initial={{ opacity: 0, y: 10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      className="h-full flex flex-col items-center justify-center text-center space-y-4 py-20"
-                    >
-                      <div
-                        className={`w-16 h-16 rounded-3xl flex items-center justify-center border group ${theme.skeleton}`}
+                    activeTab === "Users" &&
+                    !recentSearchesLoading &&
+                    recentSearches?.length > 0 ? (
+                      <motion.div
+                        key="recent"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="space-y-3"
                       >
-                        <HiLightningBolt
-                          size={28}
-                          className="text-zinc-500 group-hover:text-(--color-primary) animate-pulse"
-                        />
-                      </div>
-                      <h3
-                        className={`text-sm font-black uppercase tracking-widest ${theme.textPrimary}`}
+                        <div className="flex items-center justify-between">
+                          <p className="text-[10px] font-black uppercase tracking-[0.25em] text-muted">
+                            Recent
+                          </p>
+                          <button
+                            onClick={handleClearRecent}
+                            className="text-[10px] font-black uppercase tracking-widest text-zinc-500 hover:text-(--color-primary) transition-colors"
+                          >
+                            Clear all
+                          </button>
+                        </div>
+
+                        {recentSearches.map((userItem) => {
+                          const isActuallyFollowing =
+                            followingIdSet.has(userItem._id.toString());
+                          const isFollowPending =
+                            !!followPendingByUserId?.[userItem._id.toString()];
+
+                          return (
+                            <motion.div
+                              key={userItem._id}
+                              onClick={() => handleOpenUser(userItem._id)}
+                              whileHover={{ scale: 1.01, x: 5 }}
+                              className={`p-4 border rounded-2xl flex items-center gap-4 transition-all cursor-pointer ${theme.card} hover:border-(--color-primary)/50 group`}
+                            >
+                              <img
+                                src={
+                                  userItem.avatar ||
+                                  `https://ui-avatars.com/api/?name=${userItem.name}&background=random`
+                                }
+                                className="w-11 h-11 rounded-xl object-cover border border-primary/20 shadow-sm"
+                                alt={userItem.name}
+                              />
+                              <div className="flex-1">
+                                <h4
+                                  className={`text-sm font-bold tracking-tight ${theme.textPrimary}`}
+                                >
+                                  {userItem.name}
+                                </h4>
+                                <p className="text-[11px] text-zinc-500 line-clamp-1">
+                                  {userItem.bio || "No bio added yet"}
+                                </p>
+                              </div>
+
+                              <button
+                                onClick={(e) =>
+                                  handleRemoveRecent(e, userItem._id)
+                                }
+                                className="p-2 rounded-md text-zinc-500 hover:text-(--color-primary) hover:bg-primary/10 transition-all"
+                                aria-label="Remove from recent"
+                                title="Remove"
+                              >
+                                <HiX size={16} />
+                              </button>
+
+                              <button
+                                onClick={(e) => handleFollow(e, userItem._id)}
+                                disabled={
+                                  userItem._id === currentUser?._id ||
+                                  isFollowPending
+                                }
+                                className={`text-[10px] font-black uppercase tracking-tighter px-4 py-2 rounded-md cursor-pointer transition-all flex items-center gap-2 ${
+                                  isActuallyFollowing
+                                    ? "bg-primary text-white"
+                                    : "text-(--color-primary) bg-primary/10 hover:bg-primary/20"
+                                } ${userItem._id === currentUser?._id ? "opacity-0 pointer-events-none" : "opacity-100"}`}
+                              >
+                                {isActuallyFollowing ? (
+                                  <>
+                                    <HiCheck size={14} /> Following
+                                  </>
+                                ) : (
+                                  <>
+                                    <HiPlus size={14} /> Follow
+                                  </>
+                                )}
+                              </button>
+                            </motion.div>
+                          );
+                        })}
+                      </motion.div>
+                    ) : (
+                      <motion.div
+                        key="empty"
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        exit={{ opacity: 0, y: -10 }}
+                        className="h-full flex flex-col items-center justify-center text-center space-y-4 py-20"
                       >
-                        Orbiton CX Engine
-                      </h3>
-                    </motion.div>
+                        <div
+                          className={`w-16 h-16 rounded-3xl flex items-center justify-center border group ${theme.skeleton}`}
+                        >
+                          <HiLightningBolt
+                            size={28}
+                            className="text-zinc-500 group-hover:text-(--color-primary) animate-pulse"
+                          />
+                        </div>
+                        <h3
+                          className={`text-sm font-black uppercase tracking-widest ${theme.textPrimary}`}
+                        >
+                          Orbiton CX Engine
+                        </h3>
+                      </motion.div>
+                    )
                   ) : loading &&
                     (!searchResults || searchResults.length === 0) ? (
                     <motion.div
@@ -202,14 +333,14 @@ function SearchPage({ isDarkMode }) {
                       {activeTab === "Users" && searchResults?.length > 0 ? (
                         searchResults.map((userItem) => {
                           const isActuallyFollowing =
-                            currentUser?.following?.includes(userItem._id);
+                            followingIdSet.has(userItem._id.toString());
+                          const isFollowPending =
+                            !!followPendingByUserId?.[userItem._id.toString()];
 
                           return (
                             <motion.div
                               key={userItem._id}
-                              onClick={() =>
-                                navigate(`/profile/${userItem._id}`)
-                              }
+                              onClick={() => handleOpenUser(userItem._id)}
                               whileHover={{ scale: 1.01, x: 5 }}
                               className={`p-4 border rounded-2xl flex items-center gap-4 transition-all cursor-pointer ${theme.card} hover:border-(--color-primary)/50 group`}
                             >
@@ -233,7 +364,10 @@ function SearchPage({ isDarkMode }) {
                               </div>
                               <button
                                 onClick={(e) => handleFollow(e, userItem._id)}
-                                disabled={userItem._id === currentUser?._id}
+                                disabled={
+                                  userItem._id === currentUser?._id ||
+                                  isFollowPending
+                                }
                                 className={`text-[10px] font-black uppercase tracking-tighter px-4 py-2 rounded-md cursor-pointer transition-all flex items-center gap-2 ${
                                   isActuallyFollowing
                                     ? "bg-primary text-white"

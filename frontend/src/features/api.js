@@ -29,6 +29,14 @@ export const searchUser = (query) => {
   });
 };
 
+// --- Search History (Recent Searches) ---
+export const getSearchHistoryAPI = () => API.get("/users/search-history");
+export const addSearchHistoryAPI = (searchedUserId) =>
+  API.post("/users/search-history", { searchedUserId });
+export const removeSearchHistoryAPI = (searchedUserId) =>
+  API.delete(`/users/search-history/${searchedUserId}`);
+export const clearSearchHistoryAPI = () => API.delete("/users/search-history");
+
 export const toggleFollowAPI = (userId) => API.put(`/users/follow/${userId}`);
 
 export const getUserByIdAPI = (userId) => API.get(`/users/profile/${userId}`);

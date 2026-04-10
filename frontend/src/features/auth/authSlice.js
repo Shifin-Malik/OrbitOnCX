@@ -7,11 +7,118 @@ import Cookies from "js-cookie";
 const initialState = {
   user: null,
   searchResults: [],
+  recentSearches: [],
+  recentSearchesLoading: false,
+  recentSearchesError: null,
+  followPendingByUserId: {},
   loading: false,
   isError: false,
   isSuccess: false,
   message: "",
   selectedUser: null,
+};
+
+const idToString = (value) => {
+  if (!value) return "";
+  const candidate = value?._id ?? value;
+  return typeof candidate?.toString === "function" ? candidate.toString() : "";
+};
+
+const listHasId = (list, id) => {
+  const idStr = idToString(id);
+  return Array.isArray(list) && list.some((item) => idToString(item) === idStr);
+};
+
+const removeIdFromList = (list, id) => {
+  const idStr = idToString(id);
+  return Array.isArray(list)
+    ? list.filter((item) => idToString(item) !== idStr)
+    : [];
+};
+
+const getUserPreviewFromState = (state, userId) => {
+  const idStr = idToString(userId);
+  return (
+    state.searchResults?.find((u) => idToString(u?._id) === idStr) ||
+    state.recentSearches?.find((u) => idToString(u?._id) === idStr) ||
+    (idToString(state.selectedUser?._id) === idStr ? state.selectedUser : null)
+  );
+};
+
+const applyFollowTransition = (state, targetUserId, prev, next) => {
+  const targetIdStr = idToString(targetUserId);
+  if (!targetIdStr) return;
+
+  // 1) Current user following list
+  if (state.user) {
+    const wasFollowing = listHasId(state.user.following, targetIdStr);
+
+    if (next && !wasFollowing) {
+      const preview = getUserPreviewFromState(state, targetIdStr);
+      const entry = preview
+        ? {
+            _id: preview._id,
+            name: preview.name,
+            avatar: preview.avatar,
+            profilePic: preview.profilePic,
+          }
+        : targetIdStr;
+
+      state.user.following = [...(state.user.following || []), entry];
+    }
+
+    if (!next && wasFollowing) {
+      state.user.following = removeIdFromList(state.user.following, targetIdStr);
+    }
+  }
+
+  // 2) Search results + recent list item flags (if they exist)
+  if (Array.isArray(state.searchResults)) {
+    state.searchResults = state.searchResults.map((u) =>
+      idToString(u?._id) === targetIdStr ? { ...u, isFollowing: next } : u,
+    );
+  }
+  if (Array.isArray(state.recentSearches)) {
+    state.recentSearches = state.recentSearches.map((u) =>
+      idToString(u?._id) === targetIdStr ? { ...u, isFollowing: next } : u,
+    );
+  }
+
+  // 3) Selected profile sync
+  if (state.selectedUser && idToString(state.selectedUser._id) === targetIdStr) {
+    state.selectedUser.isFollowing = next;
+
+    if (state.selectedUser.stats?.followerCount != null && prev !== next) {
+      state.selectedUser.stats.followerCount = next
+        ? (state.selectedUser.stats.followerCount || 0) + 1
+        : Math.max(0, (state.selectedUser.stats.followerCount || 0) - 1);
+    }
+
+    if (next && !listHasId(state.selectedUser.followers, state.user?._id)) {
+      const currentUserData = state.user
+        ? {
+            _id: state.user._id,
+            name: state.user.name,
+            avatar: state.user.avatar,
+            bio: state.user.bio,
+          }
+        : null;
+
+      if (currentUserData) {
+        state.selectedUser.followers = [
+          ...(state.selectedUser.followers || []),
+          currentUserData,
+        ];
+      }
+    }
+
+    if (!next) {
+      state.selectedUser.followers = removeIdFromList(
+        state.selectedUser.followers || [],
+        state.user?._id,
+      );
+    }
+  }
 };
 
 export const register = createAsyncThunk(
@@ -98,7 +205,7 @@ export const toggleFollowAsync = createAsyncThunk(
   async (targetUserId, thunkAPI) => {
     try {
       const response = await authAPI.toggleFollowAPI(targetUserId);
-      return { targetUserId, data: response.data };
+      return { targetUserId, ...response.data };
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || "Action failed",
@@ -156,6 +263,62 @@ export const searchUsersAsync = createAsyncThunk(
     } catch (error) {
       return thunkAPI.rejectWithValue(
         error.response?.data?.message || "Search failed",
+      );
+    }
+  },
+);
+
+export const fetchRecentSearches = createAsyncThunk(
+  "auth/fetchRecentSearches",
+  async (_, thunkAPI) => {
+    try {
+      const response = await authAPI.getSearchHistoryAPI();
+      return response.data.users || [];
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to load recent searches",
+      );
+    }
+  },
+);
+
+export const saveRecentSearchUser = createAsyncThunk(
+  "auth/saveRecentSearchUser",
+  async (searchedUserId, thunkAPI) => {
+    try {
+      const response = await authAPI.addSearchHistoryAPI(searchedUserId);
+      return response.data.users || [];
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to save recent search",
+      );
+    }
+  },
+);
+
+export const removeRecentSearchUser = createAsyncThunk(
+  "auth/removeRecentSearchUser",
+  async (searchedUserId, thunkAPI) => {
+    try {
+      const response = await authAPI.removeSearchHistoryAPI(searchedUserId);
+      return response.data.users || [];
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to remove recent search",
+      );
+    }
+  },
+);
+
+export const clearRecentSearches = createAsyncThunk(
+  "auth/clearRecentSearches",
+  async (_, thunkAPI) => {
+    try {
+      const response = await authAPI.clearSearchHistoryAPI();
+      return response.data.users || [];
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to clear recent searches",
       );
     }
   },
@@ -253,7 +416,11 @@ const authSlice = createSlice({
 
       .addCase(getUserProfileByIdAsync.fulfilled, (state, { payload }) => {
         state.loading = false;
-        state.selectedUser = payload;
+        const derivedIsFollowing = listHasId(state.user?.following, payload?._id);
+        state.selectedUser = {
+          ...payload,
+          isFollowing: state.user ? derivedIsFollowing : !!payload?.isFollowing,
+        };
       })
       .addCase(getUserProfileByIdAsync.pending, (state) => {
         state.loading = true;
@@ -265,77 +432,121 @@ const authSlice = createSlice({
       })
 
       .addCase(searchUsersAsync.fulfilled, (state, action) => {
-        state.searchResults = action.payload;
+        const following = state.user?.following || [];
+        state.searchResults = (action.payload || []).map((u) => ({
+          ...u,
+          isFollowing: listHasId(following, u?._id),
+        }));
       })
       .addCase(searchUsersAsync.rejected, (state) => {
         state.searchResults = [];
       })
 
+      .addCase(fetchRecentSearches.pending, (state) => {
+        state.recentSearchesLoading = true;
+        state.recentSearchesError = null;
+      })
+      .addCase(fetchRecentSearches.fulfilled, (state, action) => {
+        state.recentSearchesLoading = false;
+        const following = state.user?.following || [];
+        state.recentSearches = (action.payload || []).map((u) => ({
+          ...u,
+          isFollowing: listHasId(following, u?._id),
+        }));
+      })
+      .addCase(fetchRecentSearches.rejected, (state, action) => {
+        state.recentSearchesLoading = false;
+        state.recentSearches = [];
+        state.recentSearchesError =
+          action.payload || "Failed to load recent searches";
+      })
+
+      .addCase(saveRecentSearchUser.fulfilled, (state, action) => {
+        state.recentSearches = action.payload;
+      })
+      .addCase(saveRecentSearchUser.rejected, (state, action) => {
+        state.recentSearchesError =
+          action.payload || "Failed to save recent search";
+      })
+
+      .addCase(removeRecentSearchUser.fulfilled, (state, action) => {
+        state.recentSearches = action.payload;
+      })
+      .addCase(removeRecentSearchUser.rejected, (state, action) => {
+        state.recentSearchesError =
+          action.payload || "Failed to remove recent search";
+      })
+
+      .addCase(clearRecentSearches.fulfilled, (state, action) => {
+        state.recentSearches = action.payload;
+      })
+      .addCase(clearRecentSearches.rejected, (state, action) => {
+        state.recentSearchesError =
+          action.payload || "Failed to clear recent searches";
+      })
+
+      .addCase(toggleFollowAsync.pending, (state, action) => {
+        const targetUserId = action.meta.arg;
+        const targetIdStr = idToString(targetUserId);
+        if (!targetIdStr) return;
+
+        if (state.followPendingByUserId[targetIdStr]) return;
+
+        const prevIsFollowing = listHasId(state.user?.following, targetIdStr);
+        state.followPendingByUserId[targetIdStr] = { prevIsFollowing };
+
+        // Optimistic UI update
+        applyFollowTransition(
+          state,
+          targetIdStr,
+          prevIsFollowing,
+          !prevIsFollowing,
+        );
+      })
       .addCase(toggleFollowAsync.fulfilled, (state, action) => {
-        const { targetUserId, data } = action.payload;
+        const { targetUserId, isFollowing, targetFollowerCount } =
+          action.payload || {};
+        const targetIdStr = idToString(targetUserId);
+        if (!targetIdStr) return;
 
-        // 1. Search Result Sync
-        if (state.searchResults) {
-          state.searchResults = state.searchResults.map((u) =>
-            u._id.toString() === targetUserId.toString()
-              ? { ...u, isFollowing: data.isFollowing }
-              : u,
+        delete state.followPendingByUserId[targetIdStr];
+
+        const currentIsFollowing = listHasId(state.user?.following, targetIdStr);
+        if (currentIsFollowing !== !!isFollowing) {
+          applyFollowTransition(
+            state,
+            targetIdStr,
+            currentIsFollowing,
+            !!isFollowing,
           );
-        }
-
-        
-        if (state.user) {
-          const following = state.user.following || [];
-          const targetIdStr = targetUserId.toString();
-
-          if (data.isFollowing) {
-          
-            const exists = following.some(
-              (id) => (id._id || id).toString() === targetIdStr,
-            );
-            if (!exists) {
-              state.user.following = [...following, targetUserId];
-            }
-          } else {
-            state.user.following = following.filter(
-              (id) => (id._id || id).toString() !== targetIdStr,
-            );
-          }
         }
 
         if (
           state.selectedUser &&
-          state.selectedUser._id.toString() === targetUserId.toString()
+          idToString(state.selectedUser._id) === targetIdStr &&
+          typeof targetFollowerCount === "number"
         ) {
-          state.selectedUser.isFollowing = data.isFollowing;
+          state.selectedUser.stats = state.selectedUser.stats || {};
+          state.selectedUser.stats.followerCount = targetFollowerCount;
+        }
+      })
+      .addCase(toggleFollowAsync.rejected, (state, action) => {
+        const targetIdStr = idToString(action.meta?.arg);
+        if (!targetIdStr) return;
 
+        const pending = state.followPendingByUserId[targetIdStr];
+        delete state.followPendingByUserId[targetIdStr];
 
-          if (state.selectedUser.stats) {
-            const currentFollowers =
-              state.selectedUser.stats.followerCount || 0;
-            state.selectedUser.stats.followerCount = data.isFollowing
-              ? currentFollowers + 1
-              : Math.max(0, currentFollowers - 1);
-          }
+        if (!pending) return;
 
-          if (data.isFollowing) {
-
-            const currentUserData = {
-              _id: state.user._id,
-              name: state.user.name,
-              profilePic: state.user.profilePic || state.user.avatar,
-            };
-            state.selectedUser.followers = [
-              ...(state.selectedUser.followers || []),
-              currentUserData,
-            ];
-          } else {
-            state.selectedUser.followers = (
-              state.selectedUser.followers || []
-            ).filter(
-              (u) => (u._id || u).toString() !== state.user._id.toString(),
-            );
-          }
+        const currentIsFollowing = listHasId(state.user?.following, targetIdStr);
+        if (currentIsFollowing !== pending.prevIsFollowing) {
+          applyFollowTransition(
+            state,
+            targetIdStr,
+            currentIsFollowing,
+            pending.prevIsFollowing,
+          );
         }
       })
       .addMatcher(
@@ -389,6 +600,10 @@ const authPersistConfig = {
     "isSuccess",
     "message",
     "searchResults",
+    "recentSearches",
+    "recentSearchesLoading",
+    "recentSearchesError",
+    "followPendingByUserId",
     "selectedUser",
   ],
 };

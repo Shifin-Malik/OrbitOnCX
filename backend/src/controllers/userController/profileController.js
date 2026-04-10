@@ -116,25 +116,41 @@ export const toggleFollow = asyncHandler(async (req, res) => {
     (id) => id.toString() === currentUserId.toString(),
   );
 
-  if (isAlreadyFollowing) {
-    await Promise.all([
-      User.findByIdAndUpdate(targetId, { $pull: { followers: currentUserId } }),
-      User.findByIdAndUpdate(currentUserId, { $pull: { following: targetId } }),
-    ]);
-  } else {
-    await Promise.all([
-      User.findByIdAndUpdate(targetId, {
-        $addToSet: { followers: currentUserId },
-      }),
-      User.findByIdAndUpdate(currentUserId, {
-        $addToSet: { following: targetId },
-      }),
-    ]);
-  }
+  const [updatedTargetUser, updatedCurrentUser] = await Promise.all(
+    isAlreadyFollowing
+      ? [
+          User.findByIdAndUpdate(
+            targetId,
+            { $pull: { followers: currentUserId } },
+            { returnDocument: "after" },
+          ).select("followers"),
+          User.findByIdAndUpdate(
+            currentUserId,
+            { $pull: { following: targetId } },
+            { returnDocument: "after" },
+          ).select("following"),
+        ]
+      : [
+          User.findByIdAndUpdate(
+            targetId,
+            { $addToSet: { followers: currentUserId } },
+            { returnDocument: "after" },
+          ).select("followers"),
+          User.findByIdAndUpdate(
+            currentUserId,
+            { $addToSet: { following: targetId } },
+            { returnDocument: "after" },
+          ).select("following"),
+        ],
+  );
 
   res.status(200).json({
     success: true,
+    targetUserId: targetId,
     isFollowing: !isAlreadyFollowing,
+    targetFollowerCount: updatedTargetUser?.followers?.length || 0,
+    currentFollowingCount: updatedCurrentUser?.following?.length || 0,
+    currentUserFollowingIds: updatedCurrentUser?.following || [],
     message: !isAlreadyFollowing
       ? "Followed successfully"
       : "Unfollowed successfully",
@@ -165,6 +181,120 @@ export const getUserById = asyncHandler(async (req, res) => {
 
   res.status(200).json({
     success: true,
-    user: { ...userObj, stats },
+    user: {
+      ...userObj,
+      stats,
+      isFollowing: (req.user?.following || []).some(
+        (id) => id.toString() === user._id.toString(),
+      ),
+    },
+  });
+});
+
+const SEARCH_HISTORY_USER_FIELDS = "_id name avatar bio";
+const MAX_RECENT_SEARCHES = 10;
+
+export const getSearchHistory = asyncHandler(async (req, res) => {
+  const currentUser = await User.findById(req.user._id)
+    .select("recentSearches")
+    .populate("recentSearches", SEARCH_HISTORY_USER_FIELDS);
+
+  if (!currentUser) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  const populated = (currentUser.recentSearches || []).filter(Boolean);
+  const users = populated.slice(0, MAX_RECENT_SEARCHES);
+
+  if ((currentUser.recentSearches || []).length > MAX_RECENT_SEARCHES) {
+    currentUser.recentSearches = currentUser.recentSearches.slice(
+      0,
+      MAX_RECENT_SEARCHES,
+    );
+    await currentUser.save();
+  }
+
+  res.status(200).json({
+    success: true,
+    users,
+  });
+});
+
+export const addToSearchHistory = asyncHandler(async (req, res) => {
+  const { searchedUserId } = req.body || {};
+
+  if (!searchedUserId) {
+    res.status(400);
+    throw new Error("searchedUserId is required");
+  }
+
+  if (searchedUserId.toString() === req.user._id.toString()) {
+    res.status(400);
+    throw new Error("You cannot add yourself to search history");
+  }
+
+  const searchedUser = await User.findById(searchedUserId).select(
+    SEARCH_HISTORY_USER_FIELDS,
+  );
+
+  if (!searchedUser) {
+    res.status(404);
+    throw new Error("Searched user not found");
+  }
+
+  const currentUser = await User.findById(req.user._id).select("recentSearches");
+  if (!currentUser) {
+    res.status(404);
+    throw new Error("User not found");
+  }
+
+  const normalizedId = searchedUserId.toString();
+  currentUser.recentSearches = (currentUser.recentSearches || []).filter(
+    (id) => id.toString() !== normalizedId,
+  );
+  currentUser.recentSearches.unshift(searchedUserId);
+  currentUser.recentSearches = currentUser.recentSearches.slice(
+    0,
+    MAX_RECENT_SEARCHES,
+  );
+
+  await currentUser.save();
+
+  const updated = await User.findById(req.user._id)
+    .select("recentSearches")
+    .populate("recentSearches", SEARCH_HISTORY_USER_FIELDS);
+
+  res.status(200).json({
+    success: true,
+    users: (updated?.recentSearches || []).filter(Boolean),
+  });
+});
+
+export const removeFromSearchHistory = asyncHandler(async (req, res) => {
+  const { searchedUserId } = req.params;
+
+  await User.findByIdAndUpdate(
+    req.user._id,
+    { $pull: { recentSearches: searchedUserId } },
+    { new: true },
+  );
+
+  const updated = await User.findById(req.user._id)
+    .select("recentSearches")
+    .populate("recentSearches", SEARCH_HISTORY_USER_FIELDS);
+
+  res.status(200).json({
+    success: true,
+    users: (updated?.recentSearches || []).filter(Boolean),
+  });
+});
+
+export const clearSearchHistory = asyncHandler(async (req, res) => {
+  await User.findByIdAndUpdate(req.user._id, { $set: { recentSearches: [] } });
+
+  res.status(200).json({
+    success: true,
+    users: [],
   });
 });
