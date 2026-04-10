@@ -1,7 +1,14 @@
 import React, { useEffect } from "react";
-import { Routes, Route, useLocation, matchPath } from "react-router-dom";
-import { useDispatch } from "react-redux";
+import {
+  Routes,
+  Route,
+  useLocation,
+  matchPath,
+  Navigate,
+} from "react-router-dom";
+import { useDispatch, useSelector } from "react-redux";
 import { getProfile } from "./features/auth/authSlice";
+import { sendHeartbeat } from "./features/presence/presenceSlice";
 
 // User Pages
 import Home from "./pages/Home";
@@ -14,6 +21,8 @@ import Compiler from "./pages/Compiler";
 import NotFound from "./pages/NotFound";
 import SearchPage from "./pages/SearchPage";
 import UserProfilePage from "./components/UserProfilePage";
+import QuizArena from "./components/quizz/QuizArena";
+import MissionDebrief from "./components/quizz/MissionDebrief";
 
 // Admin Pages & Layouts
 import AdminLayout from "./layouts/AdminLayout";
@@ -25,12 +34,11 @@ import ProblemManagement from "./pages/admin/ProblemManagement";
 // Protection Utilities
 import ProtectedRoute from "./utils/ProtectedRoute";
 import AdminRoute from "./utils/AdminRoute";
-import QuizArena from "./components/quizz/QuizArena";
-import MissionDebrief from "./components/quizz/MissionDebrief";
 
 function App() {
   const location = useLocation();
   const dispatch = useDispatch();
+  const { user } = useSelector((state) => state.auth);
 
   useEffect(() => {
     const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
@@ -46,29 +54,60 @@ function App() {
     }
   }, [dispatch]);
 
+  useEffect(() => {
+    if (!user?._id) return;
+
+    dispatch(sendHeartbeat());
+    const intervalId = setInterval(() => {
+      dispatch(sendHeartbeat());
+    }, 60 * 1000);
+
+    return () => clearInterval(intervalId);
+  }, [dispatch, user?._id]);
+
   const userPaths = [
     "/",
     "/profile",
     "/search",
     "/quiz",
     "/leetcode",
-    "/leetcode/:slug",
     "/compiler",
     "/profile/:id",
+    "/mission-debrief",
   ];
 
-  const isNavBarVisible = userPaths.some((path) =>
-    matchPath({ path, end: true }, location.pathname),
-  );
+  // NavBar is visible only on userPaths AND if the user is NOT an admin
+  const isNavBarVisible =
+    user?.role !== "admin" &&
+    userPaths.some((path) => matchPath({ path, end: true }, location.pathname));
 
   return (
     <div className="w-full min-h-screen bg-[var(--color-background)] text-[var(--text-color-primary)] transition-colors duration-300">
       {isNavBarVisible && <NavBar />}
 
       <Routes>
-        {/* --- Public & User Routes --- */}
-        <Route path="/" element={<Home />} />
-        <Route path="/compiler" element={<Compiler />} />
+        {/* --- Public/Landing Route --- */}
+        {/* If an Admin hits '/', redirect them to their dashboard automatically */}
+        <Route
+          path="/"
+          element={
+            user?.role === "admin" ? (
+              <Navigate to="/admin" replace />
+            ) : (
+              <Home />
+            )
+          }
+        />
+
+        {/* --- User Routes (All protected from Admins) --- */}
+        <Route
+          path="/compiler"
+          element={
+            <ProtectedRoute>
+              <Compiler />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/profile"
           element={
@@ -101,8 +140,14 @@ function App() {
             </ProtectedRoute>
           }
         />
-
-        <Route path="/quiz-arena/:id" element={<QuizArena />} />
+        <Route
+          path="/quiz-arena/:id"
+          element={
+            <ProtectedRoute>
+              <QuizArena />
+            </ProtectedRoute>
+          }
+        />
         <Route
           path="/mission-debrief"
           element={
@@ -128,6 +173,7 @@ function App() {
           }
         />
 
+        {/* --- Admin Routes (All protected from Users) --- */}
         <Route
           path="/admin"
           element={
