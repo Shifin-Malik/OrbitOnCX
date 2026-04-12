@@ -101,6 +101,22 @@ const userSchema = new mongoose.Schema(
       default: false,
     },
 
+    blockedAt: {
+      type: Date,
+      default: null,
+    },
+
+    isDeleted: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
+    deletedAt: {
+      type: Date,
+      default: null,
+    },
+
     recentSearches: {
       type: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }],
       default: [],

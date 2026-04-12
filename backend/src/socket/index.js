@@ -1,5 +1,7 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
+import User from "../models/UserModel.js";
+import { setUserOffline, setUserOnline, getUsersOnlineState } from "../services/presenceService.js";
 
 const parseCookies = (cookieHeader = "") => {
   const out = {};
@@ -26,7 +28,7 @@ export const initSocket = (httpServer, { corsOrigin }) => {
   // In-memory presence counts (room -> count). Good enough for single-node.
   const presence = new Map();
 
-  io.use((socket, next) => {
+  io.use(async (socket, next) => {
     try {
       const cookieHeader = socket.handshake.headers?.cookie || "";
       const cookies = parseCookies(cookieHeader);
@@ -34,7 +36,16 @@ export const initSocket = (httpServer, { corsOrigin }) => {
       if (!token) return next(new Error("UNAUTHORIZED"));
 
       const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
-      socket.user = { id: decoded.id, role: decoded.role };
+
+      const user = await User.findById(decoded.id)
+        .select("_id role isBlocked isDeleted")
+        .lean();
+
+      if (!user) return next(new Error("UNAUTHORIZED"));
+      if (user.isDeleted) return next(new Error("ACCOUNT_DELETED"));
+      if (user.isBlocked) return next(new Error("ACCOUNT_BLOCKED"));
+
+      socket.user = { id: String(user._id), role: user.role };
       return next();
     } catch (e) {
       return next(new Error("UNAUTHORIZED"));
@@ -47,6 +58,17 @@ export const initSocket = (httpServer, { corsOrigin }) => {
   };
 
   io.on("connection", (socket) => {
+    const userId = socket.user?.id;
+
+    if (userId) {
+      socket.join(`user:${userId}`);
+      setUserOnline(userId, socket.id)
+        .then(({ becameOnline }) => {
+          if (becameOnline) io.emit("user:online", { userId });
+        })
+        .catch(() => {});
+    }
+
     socket.on("discussion:join", ({ problemId }) => {
       if (!problemId) return;
       const room = `discussion:${problemId}`;
@@ -64,6 +86,22 @@ export const initSocket = (httpServer, { corsOrigin }) => {
     });
 
     socket.on("disconnect", () => {
+      if (userId) {
+        setUserOffline(userId, socket.id, new Date())
+          .then(async ({ becameOffline, lastSeenAt }) => {
+            if (!becameOffline) return;
+            await User.updateOne(
+              { _id: userId },
+              { $set: { lastSeenAt: lastSeenAt || new Date() } },
+            );
+            io.emit("user:offline", {
+              userId,
+              lastSeenAt: (lastSeenAt || new Date()).toISOString(),
+            });
+          })
+          .catch(() => {});
+      }
+
       // Best-effort cleanup: decrement counts for rooms the socket was in.
       // socket.rooms includes socket.id; ignore.
       for (const room of socket.rooms) {
@@ -71,6 +109,16 @@ export const initSocket = (httpServer, { corsOrigin }) => {
         presence.set(room, Math.max(0, (presence.get(room) || 0) - 1));
         updatePresence(room);
       }
+    });
+
+    socket.on("presence:bulk-sync", async ({ userIds } = {}) => {
+      if (!Array.isArray(userIds) || userIds.length === 0) {
+        socket.emit("presence:bulk-sync", { states: {} });
+        return;
+      }
+
+      const states = await getUsersOnlineState(userIds);
+      socket.emit("presence:bulk-sync", { states });
     });
   });
 

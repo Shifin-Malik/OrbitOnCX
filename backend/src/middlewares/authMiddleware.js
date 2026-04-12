@@ -22,6 +22,20 @@ export const protect = async (req, res, next) => {
         .json({ success: false, message: "User no longer exists" });
     }
 
+    if (req.user.isDeleted) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been deleted",
+      });
+    }
+
+    if (req.user.isBlocked) {
+      return res.status(403).json({
+        success: false,
+        message: "Your account has been blocked",
+      });
+    }
+
     next();
   } catch (error) {
     if (error.name === "TokenExpiredError") {

@@ -107,6 +107,13 @@ const checkBlockedUser = (user, res) => {
   }
 };
 
+const checkDeletedUser = (user, res) => {
+  if (user?.isDeleted) {
+    res.status(403);
+    throw new Error("Your account has been deleted");
+  }
+};
+
 const incrementLoginAttempts = async (email) => {
   const attemptsKey = redisKeys.loginAttempts(email);
   const blockKey = redisKeys.loginBlock(email);
@@ -270,6 +277,7 @@ export const verifyEmail = asyncHandler(async (req, res) => {
     throw new Error("User not found");
   }
 
+  checkDeletedUser(user, res);
   checkBlockedUser(user, res);
 
   user.isVerified = true;
@@ -323,6 +331,7 @@ export const loginUser = asyncHandler(async (req, res) => {
   }
 
   
+  checkDeletedUser(user, res);
   checkBlockedUser(user, res);
 
  
@@ -386,6 +395,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
     throw new Error("User not found");
   }
 
+  checkDeletedUser(user, res);
   checkBlockedUser(user, res);
 
   const otp = generateOtp();
@@ -485,6 +495,7 @@ export const resetPassword = asyncHandler(async (req, res) => {
     throw new Error("User not found");
   }
 
+  checkDeletedUser(user, res);
   checkBlockedUser(user, res);
 
   const isSamePassword = await bcrypt.compare(newPassword, user.password);
@@ -571,6 +582,7 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
     throw new Error("User not found");
   }
 
+  checkDeletedUser(user, res);
   checkBlockedUser(user, res);
 
   const newAccessToken = generateAccessToken(user._id, user.role);
@@ -617,6 +629,7 @@ export const googleAuth = asyncHandler(async (req, res) => {
   let user = await User.findOne({ email: normalizedEmail });
 
   if (user) {
+    checkDeletedUser(user, res);
     checkBlockedUser(user, res);
 
     if (user.authProvider === "local" && !user.googleId) {

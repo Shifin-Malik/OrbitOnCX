@@ -11,4 +11,9 @@ export const redisKeys = {
   loginAttempts: (email) => `auth:login_attempts:${email.toLowerCase()}`,
 
   loginBlock: (email) => `auth:login_block:${email.toLowerCase()}`,
+
+  // --- Presence (Socket.IO) ---
+  presenceSockets: (userId) => `presence:sockets:${userId}`,
+  presenceOnlineUsers: () => "presence:online_users",
+  presenceLastSeen: () => "presence:last_seen_at",
 };

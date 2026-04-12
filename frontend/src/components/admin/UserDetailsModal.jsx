@@ -1,44 +1,84 @@
 import React, { useState } from "react";
+import { useDispatch } from "react-redux";
+import {
+  updateUserRole,
+  getUserDetails,
+} from "../../features/admin/adminSlice.js";
 import {
   FaTimes,
   FaFire,
-  FaCode,
-  FaQuestionCircle,
   FaChartLine,
   FaCalendarAlt,
   FaPaperPlane,
+  FaGamepad,
+  FaCheckDouble,
+  FaShieldAlt,
 } from "react-icons/fa";
+import { toast } from "react-hot-toast";
 
 const UserDetailsModal = ({ user, onClose }) => {
+  const dispatch = useDispatch();
   const [note, setNote] = useState("");
+  const [isRoleChanging, setIsRoleChanging] = useState(false);
 
   if (!user) return null;
 
+  const followersCount =
+    user.followersCount ??
+    (Array.isArray(user.followers) ? user.followers.length : 0);
+  const followingCount =
+    user.followingCount ??
+    (Array.isArray(user.following) ? user.following.length : 0);
+
+  const handleToggleRole = async () => {
+    const newRole = user.role === "admin" ? "user" : "admin";
+    setIsRoleChanging(true);
+
+    try {
+      await dispatch(
+        updateUserRole({ userId: user._id, role: newRole }),
+      ).unwrap();
+      toast.success(`CLEARANCE: ${newRole.toUpperCase()}`, {
+        style: {
+          background: "var(--color-background-soft)",
+          color: "var(--text-color-primary)",
+          border: "1px solid var(--border-color-primary)",
+          fontSize: "12px",
+        },
+      });
+      dispatch(getUserDetails(user._id));
+    } catch (err) {
+      toast.error("OVERRIDE FAILED");
+    } finally {
+      setIsRoleChanging(false);
+    }
+  };
+
   const handleSaveNote = () => {
     if (!note.trim()) return;
-    // Add your dispatch/API call here to save the note
-    console.log(`Saving note for ${user.name}:`, note);
-    setNote(""); // Clear after sending
+    toast.success("Note Appended");
+    setNote("");
   };
 
   return (
-    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/40 backdrop-blur-md animate-in fade-in duration-300">
-      <div className="bg-background-soft/95 backdrop-blur-2xl w-full max-w-lg rounded-[2.5rem] shadow-[0_32px_64px_-12px_rgba(0,0,0,0.2)] overflow-hidden relative border border-[var(--border-color-primary)] flex flex-col max-h-[90vh]">
-        {/* Close Button */}
+    <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-500">
+      {/* Modal Container: Max width reduced from xl to lg for ~10% width reduction */}
+      <div className="bg-[var(--color-background-soft)] backdrop-blur-2xl w-full max-w-lg rounded-[2.2rem] shadow-[0_20px_50px_-12px_rgba(0,0,0,0.5)] overflow-hidden relative border border-[var(--border-color-primary)] flex flex-col max-h-[85vh]">
+        {/* --- Close Action --- */}
         <button
           onClick={onClose}
-          className="absolute top-6 right-6 p-2 text-text-muted hover:text-danger hover:bg-danger-glow rounded-full border border-[var(--border-color-primary)] transition-all z-10"
+          className="absolute top-6 right-6 p-2 text-[var(--text-color-muted)] hover:text-[var(--color-danger)] hover:bg-[var(--color-danger-glow)] rounded-lg border border-[var(--border-color-primary)] transition-all z-20"
         >
           <FaTimes size={14} />
         </button>
 
-        {/* Scrollable Content Area - Removed Scrollbar */}
         <div className="overflow-y-auto scrollbar-hide">
-          {/* Header: Cinematic Profile */}
-          <div className="p-8 pb-6 flex items-center gap-6">
-            <div className="relative">
-              <div className="h-20 w-20 rounded-[2rem] bg-gradient-to-br from-primary to-primary-dark p-[2px] shadow-lg shadow-accent-glow">
-                <div className="h-full w-full rounded-[1.9rem] bg-background-soft flex items-center justify-center text-3xl font-black text-primary overflow-hidden">
+          {/* --- Header: Scaled down padding and avatar --- */}
+          <div className="p-8 pb-6 flex flex-col sm:flex-row items-center sm:items-start gap-6">
+            <div className="relative group">
+              {/* Avatar: Reduced from h-32 to h-28 */}
+              <div className="h-28 w-28 rounded-[2rem] bg-gradient-to-tr from-[var(--color-primary)] to-[var(--color-primary-dark)] p-[2.5px] shadow-[0_0_20px_-5px_var(--color-primary)]">
+                <div className="h-full w-full rounded-[1.85rem] bg-[var(--color-background-soft)] flex items-center justify-center text-4xl font-black text-[var(--color-primary)] overflow-hidden">
                   {user.avatar ? (
                     <img
                       src={user.avatar}
@@ -50,174 +90,197 @@ const UserDetailsModal = ({ user, onClose }) => {
                   )}
                 </div>
               </div>
-              {/* Online/Status Indicator */}
               <span
-                className={`absolute -bottom-1 -right-1 h-5 w-5 border-4 border-[var(--border-color-primary)] rounded-full ${
-                  user.status === "Active" ? "bg-success" : "bg-danger"
-                }`}
+                className={`absolute bottom-1.5 right-1.5 h-6 w-6 border-[4px] border-[var(--color-background-soft)] rounded-full ${user.status === "Active" || user.status === "Online" ? "bg-[var(--color-success)] animate-pulse" : "bg-[var(--color-danger)]"}`}
               ></span>
             </div>
 
-            <div className="flex-1">
-              <h3 className="text-2xl font-black text-text-primary tracking-tighter italic uppercase">
-                {user.name}
-              </h3>
-              <p className="text-xs font-bold text-text-secondary mb-3">
+            <div className="flex-1 w-full lg:mt-8 sm:mt-1 text-center sm:text-left">
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 mb-2">
+                {/* Title: text-3xl to text-2xl */}
+                <h3 className="text-2xl font-black text-[var(--text-color-primary)] tracking-tighter italic uppercase leading-none">
+                  {user.name}
+                </h3>
+
+                <button
+                  disabled={isRoleChanging}
+                  onClick={handleToggleRole}
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg border font-black text-[9px] uppercase tracking-widest transition-all active:scale-95 ${
+                    user.role === "admin"
+                      ? "bg-[var(--color-accent-glow)] border-[var(--color-accent)] text-[var(--color-accent)]"
+                      : "bg-[var(--color-background-elevated)] border-[var(--border-color-primary)] text-[var(--text-color-secondary)] hover:text-[var(--color-primary)]"
+                  }`}
+                >
+                  {isRoleChanging ? (
+                    <div className="h-3 w-3 border-2 border-current border-t-transparent rounded-full animate-spin"></div>
+                  ) : (
+                    <>
+                      <FaShieldAlt size={11} /> Clearance
+                    </>
+                  )}
+                </button>
+              </div>
+
+              <p className="text-[12px] font-bold text-[var(--text-color-secondary)] tracking-wider mb-5 uppercase opacity-75">
                 {user.email}
               </p>
-              <div className="flex gap-2 mb-3">
-                <span className="px-3 py-1 bg-primary text-white rounded-lg text-[9px] font-black uppercase tracking-widest">
-                  {user.role || "User"}
-                </span>
-                <span className="px-3 py-1 bg-background-elevated text-text-primary border border-[var(--border-color-primary)] rounded-lg text-[9px] font-black uppercase tracking-widest">
-                  {user.status || "Active"}
-                </span>
-              </div>
 
-              {/* Network Stats: Followers / Following */}
-              <div className="flex items-center gap-4 pt-3 border-t border-[var(--border-color-primary)]">
+              <div className="flex justify-center sm:justify-start gap-5 pt-4 border-t border-[var(--border-color-primary)]">
                 <div>
-                  <span className="text-text-primary font-black">
-                    {user.followers.length || 248}
-                  </span>{" "}
-                  <span className="text-[9px] uppercase font-bold text-text-muted tracking-widest">
+                  <p className="text-lg font-black text-[var(--text-color-primary)] leading-none">
+                    {followersCount}
+                  </p>
+                  <p className="text-[8px] uppercase font-black text-[var(--text-color-muted)] tracking-[0.2em] mt-1">
                     Followers
-                  </span>
+                  </p>
                 </div>
-                <div className="w-[1px] h-3 bg-[var(--border-color-primary)]"></div>
+                <div className="w-[1px] h-6 bg-[var(--border-color-primary)]"></div>
                 <div>
-                  <span className="text-text-primary font-black">
-                    {user.following.length || 112}
-                  </span>{" "}
-                  <span className="text-[9px] uppercase font-bold text-text-muted tracking-widest">
+                  <p className="text-lg font-black text-[var(--text-color-primary)] leading-none">
+                    {followingCount}
+                  </p>
+                  <p className="text-[8px] uppercase font-black text-[var(--text-color-muted)] tracking-[0.2em] mt-1">
                     Following
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* Core Analytics Grid */}
-          <div className="px-8 py-6 grid grid-cols-2 gap-4 bg-background-elevated border-y border-[var(--border-color-primary)]">
-            {/* Streak Stat */}
-            <div className="bg-background-soft p-4 rounded-2xl border border-[var(--border-color-primary)] shadow-sm flex items-center gap-4 group hover:border-primary/40 transition-colors">
-              <div className="bg-accent-glow text-accent p-3 rounded-xl text-lg group-hover:scale-110 transition-transform">
-                <FaFire />
-              </div>
-              <div>
-                <p className="text-lg font-black text-text-primary tracking-tight">
-                  {user.streak || 12}
-                </p>
-                <p className="text-[9px] uppercase font-black text-text-muted tracking-widest">
-                  Day Streak
-                </p>
-              </div>
-            </div>
-
-            {/* Quiz Score Stat */}
-            <div className="bg-background-soft p-4 rounded-2xl border border-[var(--border-color-primary)] shadow-sm flex items-center gap-4 group hover:border-primary/40 transition-colors">
-              <div className="bg-success-glow text-success p-3 rounded-xl text-lg group-hover:scale-110 transition-transform">
-                <FaQuestionCircle />
-              </div>
-              <div>
-                <p className="text-lg font-black text-text-primary tracking-tight">
-                  {user.quizScore || "88%"}
-                </p>
-                <p className="text-[9px] uppercase font-black text-text-muted tracking-widest">
-                  Avg Quiz Score
-                </p>
-              </div>
-            </div>
-
-            {/* Problem Solving Breakdown (Full Width) */}
-            <div className="col-span-2 bg-background-soft p-5 rounded-2xl border border-[var(--border-color-primary)] shadow-sm">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="bg-primary/10 text-primary p-2.5 rounded-xl">
-                  <FaCode size={14} />
-                </div>
-                <div>
-                  <p className="text-base font-black text-text-primary leading-none">
-                    {user.solvedQuestions || 45}{" "}
-                    <span className="text-[9px] font-black uppercase text-text-muted tracking-widest ml-1">
-                      Total Solved
-                    </span>
                   </p>
                 </div>
               </div>
-
-              {/* Easy / Med / Hard Breakdown */}
-              <div className="flex gap-2">
-                <div className="flex flex-col items-center justify-center flex-1 bg-success-glow border border-[var(--border-color-primary)] rounded-xl py-2 group hover:bg-success/10 transition-colors">
-                  <span className="text-success text-[9px] uppercase font-black tracking-widest">
-                    Easy
-                  </span>
-                  <span className="text-text-primary font-black text-sm">
-                    {user.easyCount || 20}
-                  </span>
-                </div>
-                <div className="flex flex-col items-center justify-center flex-1 bg-accent-glow border border-[var(--border-color-primary)] rounded-xl py-2 group hover:bg-accent/10 transition-colors">
-                  <span className="text-accent text-[9px] uppercase font-black tracking-widest">
-                    Med
-                  </span>
-                  <span className="text-text-primary font-black text-sm">
-                    {user.mediumCount || 15}
-                  </span>
-                </div>
-                <div className="flex flex-col items-center justify-center flex-1 bg-danger-glow border border-[var(--border-color-primary)] rounded-xl py-2 group hover:bg-danger/10 transition-colors">
-                  <span className="text-danger text-[9px] uppercase font-black tracking-widest">
-                    Hard
-                  </span>
-                  <span className="text-text-primary font-black text-sm">
-                    {user.hardCount || 10}
-                  </span>
-                </div>
-              </div>
             </div>
           </div>
 
-          {/* Admin Note / Message Section */}
-          <div className="p-8 bg-background-soft">
-            <h4 className="text-[10px] font-black text-text-muted uppercase tracking-widest mb-3">
-              Admin Directives & Notes
+          {/* --- Metrics Grid: Reduced padding and icon sizes --- */}
+          <div className="px-8 py-6 grid grid-cols-2 gap-4 bg-[var(--color-background-elevated)] border-y border-[var(--border-color-primary)]">
+            {[
+              {
+                label: "Quizzes",
+                val: user.totalQuizzes || 0,
+                icon: <FaGamepad />,
+                color: "text-[var(--color-primary)]",
+                bg: "bg-[var(--color-accent-glow)]",
+              },
+              {
+                label: "Solved",
+                val: user.solvedQuestions || 0,
+                icon: <FaCheckDouble />,
+                color: "text-[var(--color-success)]",
+                bg: "bg-[var(--color-success-glow)]",
+              },
+              {
+                label: "Streak",
+                val: user.streak || 0,
+                icon: <FaFire />,
+                color: "text-[var(--color-danger)]",
+                bg: "bg-[var(--color-danger-glow)]",
+              },
+              {
+                label: "Score",
+                val: user.quizScore || "0%",
+                icon: <FaChartLine />,
+                color: "text-[var(--color-primary)]",
+                bg: "bg-[var(--color-accent-glow)]",
+              },
+            ].map((metric, i) => (
+              <div
+                key={i}
+                className={`p-4 rounded-[1.5rem] border border-[var(--border-color-primary)] flex items-center gap-4 transition-all group ${metric.bg}`}
+              >
+                <div
+                  className={`${metric.color} text-xl group-hover:rotate-12 transition-transform`}
+                >
+                  {metric.icon}
+                </div>
+                <div>
+                  <p className="text-lg font-black text-[var(--text-color-primary)] leading-none tracking-tight">
+                    {metric.val}
+                  </p>
+                  <p className="text-[8px] uppercase font-black text-[var(--text-color-muted)] tracking-widest mt-1">
+                    {metric.label}
+                  </p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* --- Complexity Breakdown --- */}
+          <div className="p-8 pb-5">
+            <h4 className="text-[9px] font-black text-[var(--text-color-muted)] uppercase tracking-[0.3em] mb-4 text-center sm:text-left">
+              Complexities
             </h4>
-            <div className="relative">
+            <div className="grid grid-cols-3 gap-3">
+              {[
+                {
+                  label: "Alpha",
+                  val: user.easyCount || 0,
+                  color: "text-[var(--color-success)]",
+                  border: "border-[var(--color-success-glow)]",
+                },
+                {
+                  label: "Sigma",
+                  val: user.mediumCount || 0,
+                  color: "text-[var(--color-accent)]",
+                  border: "border-[var(--color-accent-glow)]",
+                },
+                {
+                  label: "Omega",
+                  val: user.hardCount || 0,
+                  color: "text-[var(--color-danger)]",
+                  border: "border-[var(--color-danger-glow)]",
+                },
+              ].map((diff, i) => (
+                <div
+                  key={i}
+                  className={`border ${diff.border} bg-[var(--color-background-soft)] rounded-2xl py-4 flex flex-col items-center group transition-all`}
+                >
+                  <span
+                    className={`${diff.color} text-[8px] uppercase font-black tracking-[0.2em] mb-1.5`}
+                  >
+                    {diff.label}
+                  </span>
+                  <span className="text-[var(--text-color-primary)] font-black text-xl tracking-tighter">
+                    {diff.val}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* --- Admin Terminal: Slimmer textarea --- */}
+          <div className="px-8 pb-8">
+            <div className="relative group">
               <textarea
                 rows="2"
-                placeholder="Append a system note or direct message to this entity..."
+                placeholder="APPEND DIRECTIVE..."
                 value={note}
                 onChange={(e) => setNote(e.target.value)}
-                className="w-full bg-background-elevated border border-[var(--border-color-primary)] rounded-2xl p-4 pr-14 text-xs font-bold text-text-primary placeholder:text-text-muted/60 focus:border-primary/50 focus:ring-1 focus:ring-primary/30 outline-none resize-none transition-all scrollbar-hide"
+                className="w-full bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] rounded-[1.5rem] p-5 pr-16 text-[12px] font-bold text-[var(--text-color-primary)] placeholder:text-[var(--text-color-muted)] focus:border-[var(--color-primary)] outline-none resize-none transition-all uppercase"
               ></textarea>
               <button
                 onClick={handleSaveNote}
                 disabled={!note.trim()}
-                title="Save Note"
-                className="absolute right-3 bottom-3 h-8 w-8 flex items-center justify-center rounded-xl bg-primary text-white disabled:opacity-30 disabled:hover:scale-100 hover:scale-105 transition-all shadow-md shadow-primary/20"
+                className="absolute right-4 bottom-4 h-10 w-10 flex items-center justify-center rounded-xl bg-[var(--color-primary)] text-white disabled:opacity-20 hover:scale-105 active:scale-95 transition-all"
               >
-                <FaPaperPlane size={10} />
+                <FaPaperPlane size={14} />
               </button>
             </div>
           </div>
         </div>
 
-        {/* Footer: Timeline Info */}
-        <div className="p-5 bg-background-elevated border-t border-[var(--border-color-primary)] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
-          <div className="flex items-center gap-2 text-[9px] font-black text-text-muted uppercase tracking-widest">
-            <FaCalendarAlt className="text-primary" />
-            Registered:{" "}
-            <span className="text-text-secondary">
+        {/* --- Footer Info --- */}
+        <div className="p-6 bg-[var(--color-background-elevated)] border-t border-[var(--border-color-primary)] flex flex-col sm:flex-row items-center justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-2.5 text-[9px] font-black text-[var(--text-color-muted)] uppercase tracking-widest">
+            <FaCalendarAlt className="text-[var(--color-primary)]" />
+            Registry:{" "}
+            <span className="text-[var(--text-color-secondary)]">
               {new Date(user.createdAt || Date.now()).toLocaleDateString()}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-[9px] font-black text-text-muted uppercase tracking-widest">
-            <span
-              className={`h-1.5 w-1.5 rounded-full ${user.status === "Active" ? "bg-success animate-pulse" : "bg-danger"}`}
-            ></span>
-            Last Login:{" "}
-            <span className="text-text-secondary">
-              {new Date(
-                user.lastLogin || Date.now() - 3600000,
-              ).toLocaleString()}
+          <div className="flex items-center gap-2.5 text-[9px] font-black text-[var(--text-color-muted)] uppercase tracking-widest">
+            <span className="h-1 w-1 rounded-full bg-[var(--color-primary)] shadow-[0_0_5px_var(--color-primary)]"></span>
+            Sync:{" "}
+            <span className="text-[var(--text-color-secondary)]">
+              {new Date(user.lastLogin || Date.now()).toLocaleTimeString([], {
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
             </span>
           </div>
         </div>

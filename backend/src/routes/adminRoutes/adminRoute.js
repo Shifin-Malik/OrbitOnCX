@@ -1,5 +1,13 @@
 import express from "express";
-import { getAllUsers } from "../../controllers/adminController/userManagement.js";
+import {
+  blockUser,
+  getAllUsers,
+  getUserByIdAdmin,
+  getUsers,
+  softDeleteUserAdmin,
+  unblockUser,
+  updateUserRole,
+} from "../../controllers/adminController/userManagement.js";
 import { getDashboardStats } from "../../controllers/adminController/dashboardController.js";
 
 import {
@@ -26,6 +34,14 @@ const router = express.Router();
 router.use(protect, isAdmin);
 
 // --- User Management ---
+router.get("/users", getUsers);
+router.get("/users/:id", getUserByIdAdmin);
+router.patch("/users/:id/block", blockUser);
+router.patch("/users/:id/unblock", unblockUser);
+router.patch("/users/:id/role", updateUserRole);
+router.patch("/users/:id/soft-delete", softDeleteUserAdmin);
+
+// Backward-compat
 router.get("/all-users", getAllUsers);
 
 // --- Dashboard ---
