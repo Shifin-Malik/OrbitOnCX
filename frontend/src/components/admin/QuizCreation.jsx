@@ -11,8 +11,56 @@ import {
   FaSpinner,
   FaInfoCircle,
 } from "react-icons/fa";
+import { toast } from "react-hot-toast";
 
-const QuizCreation = ({ onBack, onSave, editData }) => {
+const CATEGORY_OPTIONS = [
+  "JavaScript",
+  "TypeScript",
+  "React",
+  "Node.js",
+  "MongoDB",
+  "CSS",
+  "Full-Stack",
+  "Python",
+  "Go",
+];
+
+const DIFFICULTY_OPTIONS = ["Easy", "Medium", "Advanced"];
+
+const createEmptyQuestion = () => ({
+  q: "",
+  options: ["", "", "", ""],
+  correctAnswer: "",
+  difficulty: "Easy",
+  explanation: "",
+});
+
+const normalizeQuestion = (raw = {}) => {
+  const options = Array.isArray(raw.options) ? [...raw.options] : [];
+  while (options.length < 4) options.push("");
+
+  return {
+    _id: raw._id || raw.id || undefined,
+    q: raw.q || raw.question || "",
+    options: options.slice(0, 4).map((option) => String(option || "").trim()),
+    correctAnswer: String(raw.correctAnswer || raw.answer || "").trim(),
+    difficulty: raw.difficulty || "Easy",
+    explanation: raw.explanation || "",
+  };
+};
+
+const QuizCreation = ({
+  onBack,
+  onSave,
+  editData,
+  isSubmitting = false,
+  isEditLoading = false,
+  onBulkCreate,
+  onPreviewPdf,
+  onCommitPdfImport,
+  pdfPreview,
+  onClearPdfPreview,
+}) => {
   const [importMode, setImportMode] = useState("manual"); // manual | bulk | ai
   const [isProcessing, setIsProcessing] = useState(false);
   const [bulkText, setBulkText] = useState("");
@@ -30,15 +78,10 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
   });
 
   // Aligned perfectly with Question Mongoose Schema
-  const [questions, setQuestions] = useState([
-    {
-      q: "",
-      options: ["", "", "", ""],
-      correctAnswer: "",
-      difficulty: "Easy",
-      explanation: "",
-    },
-  ]);
+  const [questions, setQuestions] = useState([createEmptyQuestion()]);
+
+  const isBusy = isSubmitting || isProcessing || isEditLoading;
+  const isEditMode = Boolean(editData?._id);
 
   // Sync state if editing existing quiz
   useEffect(() => {
@@ -53,10 +96,25 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
         thumbnail: editData.thumbnail || "",
         isActive: editData.isActive !== false,
       });
-      if (editData.questions && editData.questions.length > 0) {
-        setQuestions(editData.questions);
-      }
+      const mappedQuestions =
+        Array.isArray(editData.questions) && editData.questions.length > 0
+          ? editData.questions.map((question) => normalizeQuestion(question))
+          : [createEmptyQuestion()];
+      setQuestions(mappedQuestions);
+      return;
     }
+
+    setQuizData({
+      title: "",
+      description: "",
+      category: "JavaScript",
+      difficulty: "Easy",
+      xpPotential: 1000,
+      timeLimit: 600,
+      thumbnail: "",
+      isActive: true,
+    });
+    setQuestions([createEmptyQuestion()]);
   }, [editData]);
 
   // --- PDF/AI GENERATION LOGIC ---
@@ -64,47 +122,151 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
     const file = e.target.files[0];
     if (!file) return;
 
+    if (!onPreviewPdf) {
+      toast.error("PDF preview is not connected yet.");
+      return;
+    }
+
     setIsProcessing(true);
 
-    // Logic to send to your MERN backend would go here
-    // Example:
-    // const formData = new FormData(); formData.append("pdf", file);
-    // const response = await axios.post('/api/ai/generate', formData);
-
-    setTimeout(() => {
-      // Mock result
+    try {
+      await onPreviewPdf({
+        file,
+        defaultDifficulty: quizData.difficulty,
+      });
+    } catch (error) {
+      toast.error(
+        error?.message ||
+          error?.response?.data?.message ||
+          "Failed to parse PDF file",
+      );
+    } finally {
       setIsProcessing(false);
-      setImportMode("manual");
-      alert("AI has generated questions from your PDF! Please review them.");
-    }, 3000);
+      e.target.value = "";
+    }
   };
 
   // --- BULK PARSER LOGIC ---
-  const handleBulkImport = () => {
+  const handleBulkImport = async () => {
     try {
       const parsed = JSON.parse(bulkText);
-      if (Array.isArray(parsed)) {
-        setQuestions(parsed);
+      if (!Array.isArray(parsed) || parsed.length === 0) {
+        toast.error("JSON must be a non-empty array.");
+        return;
+      }
+
+      const first = parsed[0] || {};
+      const looksLikeQuestionArray =
+        typeof first === "object" &&
+        !Array.isArray(first) &&
+        (Object.prototype.hasOwnProperty.call(first, "q") ||
+          Object.prototype.hasOwnProperty.call(first, "question")) &&
+        Object.prototype.hasOwnProperty.call(first, "options");
+
+      if (looksLikeQuestionArray) {
+        setQuestions(parsed.map((item) => normalizeQuestion(item)));
         setImportMode("manual");
         setBulkText("");
+        toast.success("Questions loaded into manual editor.");
+        return;
       }
-    } catch (e) {
-      alert("Invalid JSON format. Please check the structure.");
+
+      if (!onBulkCreate) {
+        toast.error("Bulk quiz creation is not available right now.");
+        return;
+      }
+
+      setIsProcessing(true);
+
+      const normalizedBulkPayload = parsed.map((item) => {
+        const quizData = item?.quizData ? item.quizData : item;
+        const itemQuestions = Array.isArray(item?.questions)
+          ? item.questions
+          : Array.isArray(item?.quizData?.questions)
+            ? item.quizData.questions
+            : [];
+
+        return {
+          quizData,
+          questions: itemQuestions,
+        };
+      });
+
+      await onBulkCreate(normalizedBulkPayload);
+      setBulkText("");
+    } catch {
+      toast.error("Invalid JSON format. Please check the structure.");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleSaveClick = async () => {
+    if (!onSave) return;
+
+    if (importMode === "bulk") {
+      await handleBulkImport();
+      return;
+    }
+
+    if (!quizData.title.trim()) {
+      toast.error("Quiz title is required.");
+      return;
+    }
+
+    await onSave({
+      quizData,
+      questions,
+    });
+  };
+
+  const handleApplyPreviewToEditor = () => {
+    if (!pdfPreview?.questions?.length) {
+      toast.error("No parsed questions found.");
+      return;
+    }
+
+    setQuestions(
+      pdfPreview.questions.map((question) => normalizeQuestion(question)),
+    );
+    setImportMode("manual");
+    toast.success("Parsed questions loaded into editor.");
+  };
+
+  const handleCommitPdfSave = async () => {
+    if (!onCommitPdfImport) {
+      toast.error("PDF save flow is not connected yet.");
+      return;
+    }
+
+    if (!pdfPreview?.questions?.length) {
+      toast.error("Please preview a PDF before saving.");
+      return;
+    }
+
+    setIsProcessing(true);
+
+    try {
+      await onCommitPdfImport({
+        quizData,
+        questions: pdfPreview.questions.map((question) =>
+          normalizeQuestion(question),
+        ),
+      });
+    } catch (error) {
+      toast.error(
+        error?.message ||
+          error?.response?.data?.message ||
+          "Failed to save parsed PDF questions",
+      );
+    } finally {
+      setIsProcessing(false);
     }
   };
 
   // --- QUESTION HANDLERS ---
   const addQuestion = () => {
-    setQuestions((prev) => [
-      ...prev,
-      {
-        q: "",
-        options: ["", "", "", ""],
-        correctAnswer: "",
-        difficulty: "Easy",
-        explanation: "",
-      },
-    ]);
+    setQuestions((prev) => [...prev, createEmptyQuestion()]);
   };
 
   const removeQuestion = (index) => {
@@ -129,6 +291,19 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
       }),
     );
   };
+
+  if (isEditLoading) {
+    return (
+      <div className="min-h-screen bg-[var(--color-background)] flex items-center justify-center">
+        <div className="space-y-4 text-center">
+          <div className="h-12 w-12 border-2 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin mx-auto"></div>
+          <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-color-muted)]">
+            Loading Quiz Blueprint...
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-[var(--color-background)] p-4 md:p-6 space-y-5 animate-in slide-in-from-bottom-4 duration-500">
@@ -163,10 +338,26 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
         </div>
 
         <button
-          onClick={() => onSave({ quizData, questions })}
+          onClick={
+            importMode === "ai" && pdfPreview?.questions?.length
+              ? handleCommitPdfSave
+              : handleSaveClick
+          }
+          disabled={isBusy}
           className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--color-primary-dark)] shadow-lg shadow-[var(--color-success-glow)] transition-all active:scale-95 flex items-center"
         >
-          <FaSave className="mr-2" /> Save Blueprint
+          {isBusy ? (
+            <FaSpinner className="mr-2 animate-spin" />
+          ) : (
+            <FaSave className="mr-2" />
+          )}
+          {importMode === "bulk"
+            ? "Process Bulk"
+            : importMode === "ai" && pdfPreview?.questions?.length
+              ? "Confirm PDF Save"
+              : isEditMode
+                ? "Update Blueprint"
+                : "Save Blueprint"}
         </button>
       </div>
 
@@ -236,17 +427,7 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
                       setQuizData({ ...quizData, category: e.target.value })
                     }
                   >
-                    {[
-                      "JavaScript",
-                      "TypeScript",
-                      "React",
-                      "Node.js",
-                      "MongoDB",
-                      "CSS",
-                      "Full-Stack",
-                      "Python",
-                      "Go",
-                    ].map((c) => (
+                    {CATEGORY_OPTIONS.map((c) => (
                       <option key={c} value={c}>
                         {c}
                       </option>
@@ -264,7 +445,7 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
                       setQuizData({ ...quizData, difficulty: e.target.value })
                     }
                   >
-                    {["Easy", "Medium", "Advanced"].map((d) => (
+                    {DIFFICULTY_OPTIONS.map((d) => (
                       <option key={d} value={d}>
                         {d}
                       </option>
@@ -338,6 +519,68 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
                     Orbiton AI is reading PDF...
                   </p>
                 </div>
+              ) : pdfPreview?.questions?.length ? (
+                <div className="w-full max-w-2xl space-y-4 text-left">
+                  <div className="bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] rounded-xl p-4">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[var(--color-primary)]">
+                      PDF Parse Preview
+                    </p>
+                    <p className="text-[11px] text-[var(--text-color-secondary)] mt-1">
+                      Valid Questions:{" "}
+                      <span className="font-black text-[var(--text-color-primary)]">
+                        {pdfPreview.meta?.validCount ||
+                          pdfPreview.questions.length}
+                      </span>{" "}
+                      | Rejected Blocks:{" "}
+                      <span className="font-black text-[var(--color-danger)]">
+                        {pdfPreview.meta?.invalidCount || 0}
+                      </span>
+                    </p>
+                  </div>
+
+                  <div className="space-y-2 max-h-[38vh] overflow-y-auto pr-1 custom-scrollbar">
+                    {pdfPreview.questions.slice(0, 6).map((item, idx) => (
+                      <div
+                        key={idx}
+                        className="bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] rounded-xl p-3"
+                      >
+                        <p className="text-[11px] font-bold text-[var(--text-color-primary)]">
+                          {idx + 1}. {item.q}
+                        </p>
+                        <p className="text-[10px] text-[var(--text-color-muted)] mt-1">
+                          Answer:{" "}
+                          <span className="text-[var(--color-success)] font-black">
+                            {item.correctAnswer}
+                          </span>
+                        </p>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="flex flex-wrap gap-2 pt-1">
+                    <button
+                      onClick={handleApplyPreviewToEditor}
+                      className="bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] text-[var(--text-color-primary)] px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest hover:border-[var(--color-primary)] transition-all"
+                    >
+                      Load Into Editor
+                    </button>
+                    <button
+                      onClick={handleCommitPdfSave}
+                      disabled={isBusy}
+                      className="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-[var(--color-primary-dark)] transition-all disabled:opacity-60"
+                    >
+                      Save Parsed Data
+                    </button>
+                    {onClearPdfPreview ? (
+                      <button
+                        onClick={onClearPdfPreview}
+                        className="bg-transparent border border-[var(--border-color-primary)] text-[var(--text-color-muted)] px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest hover:text-[var(--text-color-primary)] transition-all"
+                      >
+                        Clear Preview
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               ) : (
                 <>
                   <div className="h-20 w-20 bg-[var(--color-secondary)] rounded-3xl flex items-center justify-center text-[var(--color-primary)] text-3xl shadow-inner">
@@ -356,7 +599,7 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
                     type="file"
                     id="ai-upload"
                     className="hidden"
-                    accept=".pdf,.txt"
+                    accept=".pdf"
                     onChange={handlePDFUpload}
                   />
                   <label
@@ -379,15 +622,16 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
               </div>
               <textarea
                 className="w-full h-[50vh] bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] rounded-xl p-4 text-[10px] font-mono outline-none focus:ring-1 ring-[var(--color-primary)] custom-scrollbar"
-                placeholder='[{"q": "Example?", "options": ["A", "B", "C", "D"], "correctAnswer": "A", "difficulty": "Easy", "explanation": "Because..."}]'
+                placeholder='[{ "title": "JavaScript Basics", "category": "JavaScript", "difficulty": "Easy", "timeLimit": 600, "xpPotential": 1000, "isActive": true, "questions": [{ "q": "What is closure?", "options": ["A","B","C","D"], "correctAnswer": "A", "difficulty": "Easy" }] }]'
                 value={bulkText}
                 onChange={(e) => setBulkText(e.target.value)}
               />
               <button
                 onClick={handleBulkImport}
+                disabled={isBusy}
                 className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--color-primary-dark)] transition-all"
               >
-                Process JSON Structure
+                {isBusy ? "Processing..." : "Process JSON Structure"}
               </button>
             </div>
           ) : (
@@ -413,6 +657,7 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
                   >
                     <button
                       onClick={() => removeQuestion(qIdx)}
+                      disabled={questions.length <= 1}
                       className="absolute top-5 right-5 text-red-400 opacity-0 group-hover/q:opacity-100 transition-opacity hover:text-red-600"
                     >
                       <FaTrash size={12} />
@@ -441,7 +686,7 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
                               {String.fromCharCode(65 + oIdx)}
                             </span>
                             <input
-                              className="w-full bg-white border border-[var(--border-color-primary)] rounded-lg p-2 text-[10px] outline-none focus:border-[var(--color-primary)]"
+                              className="w-full bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] rounded-lg p-2 text-[10px] outline-none focus:border-[var(--color-primary)]"
                               value={opt}
                               placeholder={`Option ${oIdx + 1}`}
                               onChange={(e) =>
@@ -494,7 +739,7 @@ const QuizCreation = ({ onBack, onSave, editData }) => {
                               )
                             }
                           >
-                            {["Easy", "Medium", "Advanced"].map((d) => (
+                            {DIFFICULTY_OPTIONS.map((d) => (
                               <option key={d} value={d}>
                                 {d}
                               </option>

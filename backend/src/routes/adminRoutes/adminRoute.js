@@ -11,15 +11,20 @@ import {
 import { getDashboardStats } from "../../controllers/adminController/dashboardController.js";
 
 import {
+  bulkCreateQuizzes,
+  commitQuizPdfImport,
   createQuiz,
   deleteQuiz,
   getAllQuizzes,
   getQuizById,
+  previewQuizPdfImport,
+  toggleQuizStatus,
   updateQuiz,
 } from "../../controllers/adminController/adminQuizController.js";
 
 
 import {
+  addQuestionToQuiz,
   getQuestionsByQuiz,
   updateQuestion,
   deleteQuestion,
@@ -28,6 +33,7 @@ import {
 
 import { protect, isAdmin } from "../../middlewares/authMiddleware.js";
 import uploadQuiz from "../../middlewares/uploadQuiz.js";
+import uploadQuizPdf from "../../middlewares/uploadQuizPdf.js";
 
 const router = express.Router();
 
@@ -51,6 +57,17 @@ router.get("/dashboard/stats", getDashboardStats);
 // --- Quiz Management ---
 router.post("/quizzes", uploadQuiz.single("thumbnail"), createQuiz);
 router.get("/quizzes", getAllQuizzes);
+router.post("/quizzes/bulk", bulkCreateQuizzes);
+router.post(
+  "/quizzes/import/pdf/preview",
+  uploadQuizPdf.single("file"),
+  previewQuizPdfImport,
+);
+router.post("/quizzes/import/pdf/commit", commitQuizPdfImport);
+router.patch("/quizzes/:id/toggle-status", toggleQuizStatus);
+router.post("/quizzes/:quizId/questions", addQuestionToQuiz);
+router.post("/quizzes/:quizId/questions/bulk", bulkAddQuestions);
+router.get("/quizzes/:quizId/questions", getQuestionsByQuiz);
 router.get("/quizzes/:id", getQuizById);
 router.put("/quizzes/:id", uploadQuiz.single("thumbnail"), updateQuiz);
 router.delete("/quizzes/:id", deleteQuiz);

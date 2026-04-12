@@ -1,6 +1,9 @@
 
 const errorHandler = (err, req, res, next) => {
   let statusCode = res.statusCode !== 200 ? res.statusCode : 500;
+  if (Number.isInteger(err.statusCode)) {
+    statusCode = err.statusCode;
+  }
 
   if (err.name === "CastError") {
     statusCode = 404;
@@ -10,6 +13,12 @@ const errorHandler = (err, req, res, next) => {
   if (err.name === "JsonWebTokenError") {
     statusCode = 401;
     err.message = "Invalid token";
+  }
+
+  if (err.code === 11000) {
+    statusCode = 409;
+    const duplicateKey = Object.keys(err.keyPattern || {})[0] || "field";
+    err.message = `Duplicate value found for ${duplicateKey}.`;
   }
 
   res.status(statusCode).json({
