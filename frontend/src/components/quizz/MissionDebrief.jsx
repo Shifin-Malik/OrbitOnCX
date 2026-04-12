@@ -4,7 +4,11 @@ import { useDispatch, useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 import { FaBolt, FaHome, FaRedo, FaTrophy } from "react-icons/fa";
 
-import { clearBattle, clearResults, startQuiz } from "../../features/quizz/quizzSlice.js";
+import {
+  clearBattle,
+  clearResults,
+  startQuiz,
+} from "../../features/quizz/quizzSlice.js";
 
 const rankLabel = (rank) => {
   if (!rank) return "FAILED_PROTOCOL";
@@ -14,14 +18,17 @@ const rankLabel = (rank) => {
 const MissionDebrief = () => {
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const { results, activeBattle, submitting } = useSelector((state) => state.quiz);
+  const { results, activeBattle, submitting } = useSelector(
+    (state) => state.quiz,
+  );
 
   if (!results) return null;
 
   const correctAnswers = results.correctAnswers ?? 0;
   const wrongAnswers = results.wrongAnswers ?? 0;
   const total = correctAnswers + wrongAnswers;
-  const percentage = Math.round((results.percentage ?? results.score ?? 0) * 100) / 100;
+  const percentage =
+    Math.round((results.percentage ?? results.score ?? 0) * 100) / 100;
   const xpGained = results.xpGained ?? 0;
   const rank = results.rank || "FAILED";
   const globalRank = results.globalRank;
@@ -49,7 +56,7 @@ const MissionDebrief = () => {
   };
 
   return (
-    <div className="w-full flex items-center justify-center p-4 transition-all duration-300">
+    <div className="w-full flex items-center justify-center p-4 transition-all duration-30 mt-20">
       <motion.div
         initial={{ opacity: 0, scale: 0.98, y: 10 }}
         animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -65,7 +72,8 @@ const MissionDebrief = () => {
                 Mission_Debrief
               </h2>
               <p className="mt-1.5 text-[10px] font-bold uppercase tracking-widest text-[var(--text-color-muted)] truncate">
-                {activeBattle?.title || "Battle"} • {activeBattle?.category || "—"}
+                {activeBattle?.title || "Battle"} •{" "}
+                {activeBattle?.category || "—"}
               </p>
             </div>
 

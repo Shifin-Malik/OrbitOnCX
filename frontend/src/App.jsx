@@ -73,7 +73,6 @@ function App() {
     "/leetcode",
     "/compiler",
     "/profile/:id",
-    "/mission-debrief",
   ];
 
   // NavBar is visible only on userPaths AND if the user is NOT an admin
@@ -91,23 +90,12 @@ function App() {
         <Route
           path="/"
           element={
-            user?.role === "admin" ? (
-              <Navigate to="/admin" replace />
-            ) : (
-              <Home />
-            )
+            user?.role === "admin" ? <Navigate to="/admin" replace /> : <Home />
           }
         />
 
         {/* --- User Routes (All protected from Admins) --- */}
-        <Route
-          path="/compiler"
-          element={
-            <ProtectedRoute>
-              <Compiler />
-            </ProtectedRoute>
-          }
-        />
+        <Route path="/compiler" element={<Compiler />} />
         <Route
           path="/profile"
           element={

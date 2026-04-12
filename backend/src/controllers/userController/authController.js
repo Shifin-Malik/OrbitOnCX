@@ -354,6 +354,7 @@ export const loginUser = asyncHandler(async (req, res) => {
 
 
   await setRefreshTokenInRedis(user._id.toString(), refreshToken, deviceId);
+  await User.updateOne({ _id: user._id }, { $set: { lastSeenAt: new Date() } });
 
  
   res.status(200).json({
@@ -579,6 +580,8 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
     maxAge: 15 * 60 * 1000,
   });
 
+  await User.updateOne({ _id: user._id }, { $set: { lastSeenAt: new Date() } });
+
   res.status(200).json({
     success: true,
     message: "Access token refreshed successfully",
@@ -637,6 +640,7 @@ export const googleAuth = asyncHandler(async (req, res) => {
   const { refreshToken } = generateTokens(res, user._id, user.role);
 
   await setRefreshTokenInRedis(user._id.toString(), refreshToken, deviceId);
+  await User.updateOne({ _id: user._id }, { $set: { lastSeenAt: new Date() } });
 
   res.status(200).json({
     success: true,

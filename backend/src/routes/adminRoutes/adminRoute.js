@@ -1,5 +1,6 @@
 import express from "express";
 import { getAllUsers } from "../../controllers/adminController/userManagement.js";
+import { getDashboardStats } from "../../controllers/adminController/dashboardController.js";
 
 import {
   createQuiz,
@@ -26,6 +27,9 @@ router.use(protect, isAdmin);
 
 // --- User Management ---
 router.get("/all-users", getAllUsers);
+
+// --- Dashboard ---
+router.get("/dashboard/stats", getDashboardStats);
 
 
 // --- Quiz Management ---

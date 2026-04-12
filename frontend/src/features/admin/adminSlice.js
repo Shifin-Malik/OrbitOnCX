@@ -1,5 +1,5 @@
 import { createSlice, createAsyncThunk } from "@reduxjs/toolkit";
-import { getAllUsersAPI } from "./adminApi.js";
+import { getAllUsersAPI, getDashboardStatsAPI } from "./adminApi.js";
 
 export const getAllUsers = createAsyncThunk(
   "admin/getAllUsers",
@@ -15,12 +15,29 @@ export const getAllUsers = createAsyncThunk(
   }
 );
 
+export const getDashboardStats = createAsyncThunk(
+  "admin/getDashboardStats",
+  async (_, thunkAPI) => {
+    try {
+      const { data } = await getDashboardStatsAPI();
+      return data?.stats;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error.response?.data?.message || "Failed to fetch dashboard stats",
+      );
+    }
+  },
+);
+
 const initialState = {
   users: [],
   loading: false,
   error: null,
   count: 0,
   success: false,
+  dashboardStats: null,
+  dashboardLoading: false,
+  dashboardError: null,
 };
 
 const adminSlice = createSlice({
@@ -44,6 +61,18 @@ const adminSlice = createSlice({
         state.loading = false;
         state.success = false;
         state.error = action.payload;
+      })
+      .addCase(getDashboardStats.pending, (state) => {
+        state.dashboardLoading = true;
+        state.dashboardError = null;
+      })
+      .addCase(getDashboardStats.fulfilled, (state, action) => {
+        state.dashboardLoading = false;
+        state.dashboardStats = action.payload || null;
+      })
+      .addCase(getDashboardStats.rejected, (state, action) => {
+        state.dashboardLoading = false;
+        state.dashboardError = action.payload;
       });
   },
 });
