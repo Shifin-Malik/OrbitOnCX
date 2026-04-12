@@ -32,7 +32,6 @@ const UserManagement = () => {
     users = [],
     loading,
     pagination,
-    userDetails,
   } = useSelector((state) => state.admin);
 
   const [searchTerm, setSearchTerm] = useState("");
@@ -52,7 +51,7 @@ const UserManagement = () => {
     dispatch(
       getAllUsers({
         page: currentPage,
-        limit: 10,
+        limit: 5,
         search: debouncedSearch,
         role: roleFilter,
         status: statusFilter,
