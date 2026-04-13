@@ -238,7 +238,7 @@ const QuizManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-background)] p-3.5 md:p-8 space-y-7 animate-in fade-in duration-700">
+    <div className="min-h-screen bg-[var(--color-background)] p-3.5 md:p-4 space-y-4 animate-in fade-in duration-700">
       <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-5 px-0.5">
         <div className="space-y-2.5">
           <div className="flex items-center gap-2">

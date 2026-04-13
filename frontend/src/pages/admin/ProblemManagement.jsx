@@ -262,7 +262,7 @@ const ProblemManagement = () => {
   }
 
   return (
-    <div className="min-h-screen bg-[var(--color-background)] p-4 md:p-8 space-y-6 animate-in fade-in duration-500">
+    <div className="min-h-screen bg-[var(--color-background)] p-4 md:p-4 space-y-4 animate-in fade-in duration-500">
       {isJsonModalOpen ? (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-[var(--color-background-soft)] w-full max-w-3xl rounded-[2rem] border border-[var(--border-color-primary)] shadow-2xl overflow-hidden">

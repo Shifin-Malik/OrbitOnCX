@@ -81,7 +81,11 @@ const userSchema = new mongoose.Schema(
     lastSolvedDayKey: { type: String, default: null }, // YYYY-MM-DD (UTC)
     lastActivity: { type: Date },
     lastSeenAt: { type: Date, default: null, index: true },
-
+    isOnline: {
+      type: Boolean,
+      default: false,
+      index: true, 
+    },
     problemsSolved: {
       easy: [{ type: mongoose.Schema.Types.ObjectId, ref: "Problem" }],
       medium: [{ type: mongoose.Schema.Types.ObjectId, ref: "Problem" }],

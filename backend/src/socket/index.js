@@ -1,7 +1,11 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
 import User from "../models/UserModel.js";
-import { setUserOffline, setUserOnline, getUsersOnlineState } from "../services/presenceService.js";
+import {
+  setUserOffline,
+  setUserOnline,
+  getUsersOnlineState,
+} from "../services/presenceService.js";
 
 const parseCookies = (cookieHeader = "") => {
   const out = {};
@@ -25,7 +29,6 @@ export const initSocket = (httpServer, { corsOrigin }) => {
     },
   });
 
-  // In-memory presence counts (room -> count). Good enough for single-node.
   const presence = new Map();
 
   io.use(async (socket, next) => {
@@ -38,16 +41,24 @@ export const initSocket = (httpServer, { corsOrigin }) => {
       const decoded = jwt.verify(token, process.env.JWT_ACCESS_SECRET);
 
       const user = await User.findById(decoded.id)
-        .select("_id role isBlocked isDeleted")
+        .select("_id name role isBlocked isDeleted")
         .lean();
 
       if (!user) return next(new Error("UNAUTHORIZED"));
       if (user.isDeleted) return next(new Error("ACCOUNT_DELETED"));
       if (user.isBlocked) return next(new Error("ACCOUNT_BLOCKED"));
 
-      socket.user = { id: String(user._id), role: user.role };
+      socket.user = {
+        id: String(user._id),
+        name: user.name,
+        role: user.role,
+      };
+
+      console.log(`Socket authenticated: ${user.name} (${user._id})`);
+
       return next();
     } catch (e) {
+      console.log("Socket auth failed");
       return next(new Error("UNAUTHORIZED"));
     }
   });
@@ -59,14 +70,31 @@ export const initSocket = (httpServer, { corsOrigin }) => {
 
   io.on("connection", (socket) => {
     const userId = socket.user?.id;
+    const userName = socket.user?.name;
+
+    console.log(`Socket connected: ${userName} (${userId}) | socketId: ${socket.id}`);
 
     if (userId) {
       socket.join(`user:${userId}`);
       setUserOnline(userId, socket.id)
-        .then(({ becameOnline }) => {
-          if (becameOnline) io.emit("user:online", { userId });
+        .then(async ({ becameOnline }) => {
+          if (!becameOnline) {
+            console.log(`${userName} still online with another socket`);
+            return;
+          }
+
+          await User.updateOne(
+            { _id: userId },
+            { $set: { isOnline: true } },
+          );
+
+          console.log(`${userName} is now ONLINE`);
+
+          io.emit("user:online", { userId });
         })
-        .catch(() => {});
+        .catch((err) => {
+          console.log("setUserOnline error:", err.message);
+        });
     }
 
     socket.on("discussion:join", ({ problemId }) => {
@@ -86,24 +114,42 @@ export const initSocket = (httpServer, { corsOrigin }) => {
     });
 
     socket.on("disconnect", () => {
+      console.log(`Socket disconnected: ${userName} (${userId}) | socketId: ${socket.id}`);
+
       if (userId) {
         setUserOffline(userId, socket.id, new Date())
           .then(async ({ becameOffline, lastSeenAt }) => {
-            if (!becameOffline) return;
+            if (!becameOffline) {
+              console.log(`${userName} has other active sockets, still ONLINE`);
+              return;
+            }
+
             await User.updateOne(
               { _id: userId },
-              { $set: { lastSeenAt: lastSeenAt || new Date() } },
+              {
+                $set: {
+                  isOnline: false,
+                  lastSeenAt: lastSeenAt || new Date(),
+                },
+              },
             );
+
+            console.log(
+              `${userName} is now OFFLINE. Last seen: ${
+                (lastSeenAt || new Date()).toISOString()
+              }`,
+            );
+
             io.emit("user:offline", {
               userId,
               lastSeenAt: (lastSeenAt || new Date()).toISOString(),
             });
           })
-          .catch(() => {});
+          .catch((err) => {
+            console.log("setUserOffline error:", err.message);
+          });
       }
 
-      // Best-effort cleanup: decrement counts for rooms the socket was in.
-      // socket.rooms includes socket.id; ignore.
       for (const room of socket.rooms) {
         if (!room.startsWith("discussion:")) continue;
         presence.set(room, Math.max(0, (presence.get(room) || 0) - 1));
@@ -124,4 +170,3 @@ export const initSocket = (httpServer, { corsOrigin }) => {
 
   return io;
 };
-

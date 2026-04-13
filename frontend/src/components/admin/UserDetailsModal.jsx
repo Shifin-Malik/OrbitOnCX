@@ -22,6 +22,7 @@ const UserDetailsModal = ({ user, onClose }) => {
   const [isRoleChanging, setIsRoleChanging] = useState(false);
 
   if (!user) return null;
+  console.log(user);
 
   const followersCount =
     user.followersCount ??
@@ -91,7 +92,7 @@ const UserDetailsModal = ({ user, onClose }) => {
                 </div>
               </div>
               <span
-                className={`absolute bottom-1.5 right-1.5 h-6 w-6 border-[4px] border-[var(--color-background-soft)] rounded-full ${user.status === "Active" || user.status === "Online" ? "bg-[var(--color-success)] animate-pulse" : "bg-[var(--color-danger)]"}`}
+                className={`absolute bottom-1.5 right-1.5 h-6 w-6 border-[4px] border-[var(--color-background-soft)] rounded-full ${user.isOnline === true ? "bg-[var(--color-success)] animate-pulse" : "bg-[var(--color-danger)]"}`}
               ></span>
             </div>
 

@@ -123,7 +123,7 @@ const UserManagement = () => {
     );
 
   return (
-    <div className="min-h-screen bg-[var(--color-background)] p-4 lg:p-7 space-y-6 animate-in fade-in duration-500">
+    <div className="min-h-screen bg-[var(--color-background)] p-4 lg:p-4 space-y-4 animate-in fade-in duration-500">
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-5 px-1">
         <div>
@@ -249,15 +249,25 @@ const UserManagement = () => {
                   >
                     <td className="px-7 py-4">
                       <div className="flex items-center gap-4">
-                        <div className="h-10 w-10 rounded-[1rem] bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] flex items-center justify-center font-black text-[12px] text-[var(--color-primary)]">
+                        <div className="relative h-10 w-10 rounded-[1rem] bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] flex items-center justify-center font-black text-[12px] text-[var(--color-primary)]">
                           {user.avatar ? (
                             <img
                               src={user.avatar}
                               className="h-full w-full object-cover rounded-[1rem]"
+                              alt={user.name}
                             />
                           ) : (
                             user.name.charAt(0)
                           )}
+
+                          {/* Online/Offline Status Dot */}
+                          <span
+                            className={`absolute -bottom-1 -right-1 h-3.5 w-3.5 rounded-full border-2 border-[var(--color-background-elevated)] ${
+                              user.isOnline
+                                ? "bg-[var(--color-success)] animate-pulse"
+                                : "bg-[var(--color-danger)]"
+                            }`}
+                          ></span>
                         </div>
                         <div>
                           <p className="text-[13px] font-black text-[var(--text-color-primary)] group-hover:text-[var(--color-primary)] transition-colors">
