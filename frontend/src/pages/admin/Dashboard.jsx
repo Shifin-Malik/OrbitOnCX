@@ -29,7 +29,7 @@ const Dashboard = () => {
   const formatNumber = (n) =>
     dashboardLoading ? "..." : Number(n || 0).toLocaleString();
 
-  // Mock data for the graph - in production, you'd fetch this from backend
+  
   const trafficData = [30, 45, 35, 60, 55, 80, 75, 90, 85, 100];
   
   const activeRate = useMemo(
@@ -39,7 +39,7 @@ const Dashboard = () => {
 
   return (
     <div className="p-4 space-y-5 animate-in fade-in slide-in-from-bottom-2 duration-700">
-      {/* --- Compact Header --- */}
+     
       <div className="flex justify-between items-center border-b border-[var(--border-color-primary)] pb-4">
         <div>
           <p className="text-[var(--color-primary)] text-[9px] font-black uppercase tracking-[0.3em]">
@@ -55,7 +55,7 @@ const Dashboard = () => {
         </div>
       </div>
 
-      {/* --- Stat Cards --- */}
+
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <StatCard title="Total Users" value={formatNumber(totalUsers)} trend="+5.2%" icon={<FaUsers />} color="text-primary" bg="bg-primary/10" />
         <StatCard title="Active Now" value={formatNumber(activeUsers)} trend="Live" icon={<FaUserCheck />} color="text-emerald-400" bg="bg-emerald-500/10" isLive />

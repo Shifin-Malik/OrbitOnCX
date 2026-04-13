@@ -30,6 +30,17 @@ import {
   deleteQuestion,
   bulkAddQuestions,
 } from "../../controllers/adminController/adminQuestionController.js";
+import {
+  createProblem,
+  createProblemFromJson,
+  createProblemsFromJsonBulk,
+  deleteProblem,
+  getAdminProblems,
+  getProblemById,
+  toggleProblemStatus,
+  updateProblem,
+  updateProblemFromJson,
+} from "../../controllers/adminController/adminProblemController.js";
 
 import { protect, isAdmin } from "../../middlewares/authMiddleware.js";
 import uploadQuiz from "../../middlewares/uploadQuiz.js";
@@ -78,5 +89,16 @@ router.post("/questions", bulkAddQuestions);
 router.get("/questions/quiz/:quizId", getQuestionsByQuiz);
 router.put("/questions/:id", updateQuestion);
 router.delete("/questions/:id", deleteQuestion);
+
+// --- Problem Management ---
+router.post("/problems", createProblem);
+router.post("/problems/json", createProblemFromJson);
+router.post("/problems/json/bulk", createProblemsFromJsonBulk);
+router.get("/problems", getAdminProblems);
+router.get("/problems/:id", getProblemById);
+router.put("/problems/:id", updateProblem);
+router.put("/problems/:id/json", updateProblemFromJson);
+router.delete("/problems/:id", deleteProblem);
+router.patch("/problems/:id/status", toggleProblemStatus);
 
 export default router;

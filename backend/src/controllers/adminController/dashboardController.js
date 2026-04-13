@@ -1,9 +1,9 @@
 import asyncHandler from "express-async-handler";
-import User from "../../models/UserModel.js";
+import User from "../../models/userModel.js";
 import Problem from "../../models/ProblemModel.js";
 import Quiz from "../../models/QuizModel.js";
 
-const ACTIVE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
+const ACTIVE_WINDOW_MS = 5 * 60 * 1000; 
 const getCutoffDate = () => new Date(Date.now() - ACTIVE_WINDOW_MS);
 
 export const getDashboardStats = asyncHandler(async (req, res) => {

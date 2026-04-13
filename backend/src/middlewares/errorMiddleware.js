@@ -5,6 +5,14 @@ const errorHandler = (err, req, res, next) => {
     statusCode = err.statusCode;
   }
 
+  if (
+    err?.type === "entity.parse.failed" ||
+    (err instanceof SyntaxError && Object.prototype.hasOwnProperty.call(err, "body"))
+  ) {
+    statusCode = 400;
+    err.message = "Invalid JSON payload.";
+  }
+
   if (err.name === "CastError") {
     statusCode = 404;
     err.message = "Resource not found";

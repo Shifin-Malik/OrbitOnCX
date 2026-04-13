@@ -37,6 +37,9 @@ const isSupportedLanguage = (problem, language) => {
   return supported.includes(language);
 };
 
+const getTestCaseExpectedOutput = (testCase = {}) =>
+  testCase.output ?? testCase.expectedOutput ?? "";
+
 export const runProblem = asyncHandler(async (req, res) => {
   const { slug } = req.params;
   const { language, code } = req.body || {};
@@ -79,12 +82,13 @@ export const runProblem = asyncHandler(async (req, res) => {
 
   for (let i = 0; i < visible.length; i++) {
     const t = visible[i];
+    const expectedOutput = getTestCaseExpectedOutput(t);
     // eslint-disable-next-line no-await-in-loop
     const r = await evaluateTestCase({
       language,
       sourceCode: code,
       input: t.input,
-      expectedOutput: t.expectedOutput,
+      expectedOutput,
     });
 
     caseResults.push({
@@ -92,7 +96,7 @@ export const runProblem = asyncHandler(async (req, res) => {
       status: r.status,
       isAccepted: r.isAccepted,
       input: t.input,
-      expectedOutput: t.expectedOutput,
+      expectedOutput,
       actualOutput: r.actualOutput,
       stdout: r.stdout,
       stderr: r.stderr,
@@ -158,12 +162,13 @@ export const submitProblem = asyncHandler(async (req, res) => {
 
   for (let i = 0; i < hidden.length; i++) {
     const t = hidden[i];
+    const expectedOutput = getTestCaseExpectedOutput(t);
     // eslint-disable-next-line no-await-in-loop
     const r = await evaluateTestCase({
       language,
       sourceCode: code,
       input: t.input,
-      expectedOutput: t.expectedOutput,
+      expectedOutput,
     });
 
     runtime = r.time ?? runtime;
@@ -191,8 +196,19 @@ export const submitProblem = asyncHandler(async (req, res) => {
     failedTestCaseSummary: firstFail,
   });
 
-  problem.submissionCount = (problem.submissionCount || 0) + 1;
-  if (isAccepted) problem.acceptanceCount = (problem.acceptanceCount || 0) + 1;
+  const nextSubmissionsCount =
+    Number(problem.submissionsCount ?? problem.submissionCount ?? 0) + 1;
+  const nextSolvedCount =
+    Number(problem.solvedCount ?? problem.acceptanceCount ?? 0) + (isAccepted ? 1 : 0);
+
+  problem.submissionsCount = nextSubmissionsCount;
+  problem.submissionCount = nextSubmissionsCount;
+  problem.solvedCount = nextSolvedCount;
+  problem.acceptanceCount = nextSolvedCount;
+  problem.acceptanceRate =
+    nextSubmissionsCount > 0
+      ? Number(((nextSolvedCount / nextSubmissionsCount) * 100).toFixed(2))
+      : 0;
   await problem.save({ validateBeforeSave: false });
 
   let streakUpdate = null;

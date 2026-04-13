@@ -76,6 +76,18 @@ export const listProblems = asyncHandler(async (req, res) => {
     },
     {
       $addFields: {
+        submissionsCount: {
+          $ifNull: ["$submissionsCount", "$submissionCount"],
+        },
+        solvedCount: {
+          $ifNull: ["$solvedCount", "$acceptanceCount"],
+        },
+        submissionCount: {
+          $ifNull: ["$submissionsCount", "$submissionCount"],
+        },
+        acceptanceCount: {
+          $ifNull: ["$solvedCount", "$acceptanceCount"],
+        },
         hasAnySubmission: {
           $gt: [{ $ifNull: [{ $arrayElemAt: ["$mySubmissionMeta.hasAnySubmission", 0] }, 0] }, 0],
         },
@@ -97,10 +109,10 @@ export const listProblems = asyncHandler(async (req, res) => {
         },
         acceptanceRate: {
           $cond: [
-            { $gt: ["$submissionCount", 0] },
+            { $gt: ["$submissionsCount", 0] },
             {
               $multiply: [
-                { $divide: ["$acceptanceCount", "$submissionCount"] },
+                { $divide: ["$solvedCount", "$submissionsCount"] },
                 100,
               ],
             },
@@ -145,7 +157,7 @@ export const listProblems = asyncHandler(async (req, res) => {
     pipeline.push({ $sort: { difficultyOrder: 1, title: 1 } });
     pipeline.push({ $project: { difficultyOrder: 0 } });
   } else if (sort === "most-solved") {
-    pipeline.push({ $sort: { acceptanceCount: -1, submissionCount: -1 } });
+    pipeline.push({ $sort: { solvedCount: -1, submissionsCount: -1 } });
   } else pipeline.push({ $sort: { createdAt: -1 } });
 
   pipeline.push({

@@ -16,6 +16,7 @@ import authReducer from "../features/auth/authSlice.js";
 import compilerReducer from "../features/compiler/compilerSlice.js";
 import adminReducer from "../features/admin/adminSlice.js";
 import adminQuizReducer from "../features/admin/adminQuizSlice.js";
+import adminProblemReducer from "../features/admin/adminProblemSlice.js";
 import quizReducer from "../features/quizz/quizzSlice.js";
 import problemReducer from "../features/problems/problemSlice.js";
 import submissionReducer from "../features/submissions/submissionSlice.js";
@@ -28,6 +29,7 @@ const rootReducer = combineReducers({
   compiler: compilerReducer,
   admin: adminReducer,
   adminQuiz: adminQuizReducer,
+  adminProblem: adminProblemReducer,
   quiz: quizReducer,
   problems: problemReducer,
   submissions: submissionReducer,
@@ -45,6 +47,7 @@ const persistConfig = {
     "compiler",
     "admin",
     "adminQuiz",
+    "adminProblem",
     "quiz",
     "problems",
     "submissions",

@@ -1,155 +1,509 @@
-import React, { useState } from "react";
-import { 
-  FaTrash, FaEdit, FaPlus, FaSearch, FaFilter, 
-  FaBrain, FaCode, FaCheckDouble, FaExclamationTriangle 
+import React, { useEffect, useMemo, useState } from "react";
+import { useDispatch, useSelector } from "react-redux";
+import {
+  FaPlus,
+  FaSearch,
+  FaFilter,
+  FaEdit,
+  FaTrash,
+  FaFileImport,
+  FaDatabase,
+  FaCircle,
+  FaTimes,
 } from "react-icons/fa";
+import { toast } from "react-hot-toast";
+import ProblemEditor from "../../components/admin/ProblemEditor.jsx";
+import {
+  clearSelectedAdminProblem,
+  createAdminProblem,
+  createProblemFromJson,
+  deleteAdminProblem,
+  fetchAdminProblems,
+  fetchProblemForEditor,
+  importAdminProblemsFromJsonBulk,
+  updateAdminProblem,
+  updateProblemFromJson,
+} from "../../features/admin/adminProblemSlice.js";
+
+const extractErrorMessage = (error, fallback) =>
+  typeof error === "string"
+    ? error
+    : error?.message || error?.errors?.[0] || fallback;
+
+const mapProblemForCard = (problem = {}) => ({
+  _id: problem._id,
+  title: problem.title || "Untitled Problem",
+  slug: problem.slug || "",
+  difficulty: problem.difficulty || "Easy",
+  category:
+    Array.isArray(problem.tags) && problem.tags.length > 0
+      ? problem.tags[0]
+      : "General",
+  isActive: Boolean(problem.isActive ?? true),
+  points: 5,
+});
 
 const ProblemManagement = () => {
+  const dispatch = useDispatch();
 
-  const [problems, setProblems] = useState([
-    {
-      id: "P001",
-      question: "What is the output of console.log(typeof NaN)?",
-      category: "JavaScript",
-      difficulty: "Easy",
-      correctOption: "number",
-      points: 5
-    },
-    {
-      id: "P002",
-      question: "Explain the difference between useMemo and useCallback.",
-      category: "React",
-      difficulty: "Hard",
-      correctOption: "Conceptual",
-      points: 15
-    },
-    {
-      id: "P003",
-      question: "Implement a function to find the Longest Increasing Subsequence.",
-      category: "DSA",
-      difficulty: "Hard",
-      correctOption: "Code Snippet",
-      points: 20
-    },
-    {
-      id: "P004",
-      question: "Which hook is used to handle side effects in React?",
-      category: "React",
-      difficulty: "Easy",
-      correctOption: "useEffect",
-      points: 5
-    }
-  ]);
+  const {
+    problems: apiProblems = [],
+    listLoading,
+    listError,
+    selectedProblem,
+    detailLoading,
+    submitting,
+    deletingId,
+    jsonImportLoading,
+  } = useSelector((state) => state.adminProblem);
 
+  const [isEditorOpen, setIsEditorOpen] = useState(false);
+  const [editorMode, setEditorMode] = useState("create");
+  const [editingProblemId, setEditingProblemId] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
 
-  const getDifficultyColor = (level) => {
-    switch (level) {
-      case "Easy": return "bg-emerald-50 text-emerald-600 border-emerald-100";
-      case "Medium": return "bg-amber-50 text-amber-600 border-amber-100";
-      case "Hard": return "bg-rose-50 text-rose-600 border-rose-100";
-      default: return "bg-slate-50 text-slate-400";
+  const [isJsonModalOpen, setIsJsonModalOpen] = useState(false);
+  const [jsonInput, setJsonInput] = useState("");
+
+  useEffect(() => {
+    dispatch(fetchAdminProblems({ page: 1, limit: 100, sort: "newest" }));
+  }, [dispatch]);
+
+  const problems = useMemo(
+    () => apiProblems.map((problem) => mapProblemForCard(problem)),
+    [apiProblems],
+  );
+
+  const filteredProblems = useMemo(() => {
+    const keyword = searchTerm.trim().toLowerCase();
+    if (!keyword) return problems;
+
+    return problems.filter((problem) => {
+      const title = String(problem.title || "").toLowerCase();
+      const slug = String(problem.slug || "").toLowerCase();
+      const category = String(problem.category || "").toLowerCase();
+      return (
+        title.includes(keyword) ||
+        slug.includes(keyword) ||
+        category.includes(keyword)
+      );
+    });
+  }, [problems, searchTerm]);
+
+  const jsonPreview = useMemo(() => {
+    const raw = jsonInput.trim();
+    if (!raw) return null;
+
+    try {
+      const parsed = JSON.parse(raw);
+
+      if (Array.isArray(parsed)) {
+        return {
+          type: "array",
+          count: parsed.length,
+          firstTitle: parsed[0]?.title || "",
+        };
+      }
+
+      if (parsed && typeof parsed === "object") {
+        return {
+          type: "object",
+          title: parsed.title || "",
+          difficulty: parsed.difficulty || "",
+          slug: parsed.slug || "",
+        };
+      }
+
+      return {
+        type: "invalid",
+        message: "JSON must be either a single object or an array of objects.",
+      };
+    } catch {
+      return {
+        type: "invalid",
+        message: "Invalid JSON syntax.",
+      };
+    }
+  }, [jsonInput]);
+
+  const refreshProblems = () =>
+    dispatch(fetchAdminProblems({ page: 1, limit: 100, sort: "newest" }));
+
+  const openCreateEditor = () => {
+    dispatch(clearSelectedAdminProblem());
+    setEditingProblemId(null);
+    setEditorMode("create");
+    setIsEditorOpen(true);
+  };
+
+  const openEditEditor = async (problemId) => {
+    dispatch(clearSelectedAdminProblem());
+    setEditingProblemId(problemId);
+    setEditorMode("edit");
+    setIsEditorOpen(true);
+
+    try {
+      await dispatch(fetchProblemForEditor(problemId)).unwrap();
+    } catch (error) {
+      toast.error(
+        extractErrorMessage(error, "Failed to load problem for editing"),
+      );
+      setIsEditorOpen(false);
+      setEditingProblemId(null);
     }
   };
 
+  const closeEditor = () => {
+    setIsEditorOpen(false);
+    setEditingProblemId(null);
+    dispatch(clearSelectedAdminProblem());
+  };
+
+  const handleSaveForm = async (payload) => {
+    try {
+      if (editorMode === "edit" && editingProblemId) {
+        await dispatch(
+          updateAdminProblem({ problemId: editingProblemId, payload }),
+        ).unwrap();
+        toast.success("Problem updated successfully");
+      } else {
+        await dispatch(createAdminProblem(payload)).unwrap();
+        toast.success("Problem created successfully");
+      }
+
+      await refreshProblems();
+      closeEditor();
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Failed to save problem"));
+      throw error;
+    }
+  };
+
+  const handleSaveFromJson = async (payload) => {
+    try {
+      let savedProblem = null;
+      if (editorMode === "edit" && editingProblemId) {
+        savedProblem = await dispatch(
+          updateProblemFromJson({ problemId: editingProblemId, payload }),
+        ).unwrap();
+        toast.success("Problem updated successfully from JSON");
+      } else {
+        savedProblem = await dispatch(createProblemFromJson(payload)).unwrap();
+        toast.success("Problem created successfully from JSON");
+      }
+
+      await refreshProblems();
+      return savedProblem;
+    } catch (error) {
+      const message = extractErrorMessage(error, "Failed to save JSON");
+      toast.error(message);
+      throw error;
+    }
+  };
+
+  const handleDelete = async (problemId) => {
+    const confirmed = window.confirm(
+      "Are you sure you want to delete this problem?",
+    );
+    if (!confirmed) return;
+
+    try {
+      await dispatch(deleteAdminProblem(problemId)).unwrap();
+      toast.success("Problem deleted successfully");
+      await refreshProblems();
+    } catch (error) {
+      toast.error(extractErrorMessage(error, "Failed to delete problem"));
+    }
+  };
+
+  const handleImportJson = async () => {
+  const raw = jsonInput.trim();
+  if (!raw) {
+    toast.error("Please paste JSON before importing.");
+    return;
+  }
+
+  try {
+    const parsed = JSON.parse(raw);
+    
+    
+    await dispatch(importAdminProblemsFromJsonBulk(parsed)).unwrap();
+    
+    
+    toast.success("Problems imported successfully!");
+    setJsonInput(""); 
+    setIsJsonModalOpen(false);
+    await refreshProblems();
+    
+  } catch (error) {
+    
+    const message = extractErrorMessage(error, "Failed to import JSON");
+    toast.error(message);
+   
+  }
+};
+
+  if (isEditorOpen) {
+    const isEditLoading =
+      editorMode === "edit" &&
+      (detailLoading || selectedProblem?._id !== editingProblemId);
+
+    return (
+      <ProblemEditor
+        editData={editorMode === "edit" ? selectedProblem : null}
+        isEditLoading={isEditLoading}
+        isSaving={submitting}
+        isJsonSaving={jsonImportLoading}
+        onBack={closeEditor}
+        onSave={handleSaveForm}
+        onSaveFromJson={handleSaveFromJson}
+      />
+    );
+  }
+
   return (
-    <div className="min-h-screen bg-[#f8fafc] p-6 space-y-8 animate-in fade-in duration-700">
-      
-     
-      <div className="flex flex-col lg:flex-row lg:items-end justify-between gap-6 px-2">
-        <div className="space-y-3">
-          <div className="flex items-center gap-2.5">
-            <span className="h-2.5 w-2.5 rounded-full bg-[#059669] shadow-[0_0_12px_rgba(5,150,105,0.4)] animate-pulse"></span>
-            <p className="text-[#059669] text-[10px] font-black uppercase tracking-[0.4em]">
-              Problem Bank Admin
-            </p>
+    <div className="min-h-screen bg-[var(--color-background)] p-4 md:p-8 space-y-6 animate-in fade-in duration-500">
+      {isJsonModalOpen ? (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
+          <div className="bg-[var(--color-background-soft)] w-full max-w-3xl rounded-[2rem] border border-[var(--border-color-primary)] shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-[var(--border-color-primary)] flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="h-10 w-10 rounded-xl bg-[var(--color-primary)] text-white flex items-center justify-center">
+                  <FaFileImport size={14} />
+                </div>
+                <div>
+                  <h3 className="font-black uppercase tracking-wide text-sm">
+                    Import Problem JSON
+                  </h3>
+                  <p className="text-[10px] text-[var(--text-color-muted)] font-bold uppercase tracking-widest">
+                    Single object or array supported
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setIsJsonModalOpen(false)}
+                className="p-2 text-[var(--text-color-muted)] hover:text-rose-500 transition-colors"
+                aria-label="Close JSON import modal"
+              >
+                <FaTimes size={16} />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <textarea
+                className="w-full h-64 bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] rounded-2xl p-4 text-xs font-mono text-[var(--text-color-primary)] outline-none focus:ring-1 focus:ring-[var(--color-primary)]"
+                placeholder='Paste JSON here. Example: { "title": "Two Sum", "difficulty": "Easy", ... }'
+                value={jsonInput}
+                onChange={(event) => setJsonInput(event.target.value)}
+              />
+
+              {jsonPreview ? (
+                <div className="bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] rounded-xl p-3">
+                  {jsonPreview.type === "invalid" ? (
+                    <p className="text-[11px] font-bold text-rose-500">
+                      {jsonPreview.message}
+                    </p>
+                  ) : jsonPreview.type === "object" ? (
+                    <div className="text-[11px] text-[var(--text-color-secondary)] space-y-1">
+                      <p>
+                        <span className="font-black text-[var(--text-color-primary)]">
+                          Title:
+                        </span>{" "}
+                        {jsonPreview.title || "-"}
+                      </p>
+                      <p>
+                        <span className="font-black text-[var(--text-color-primary)]">
+                          Difficulty:
+                        </span>{" "}
+                        {jsonPreview.difficulty || "-"}
+                      </p>
+                      <p>
+                        <span className="font-black text-[var(--text-color-primary)]">
+                          Slug:
+                        </span>{" "}
+                        {jsonPreview.slug || "(auto-generated from title)"}
+                      </p>
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-[var(--text-color-secondary)]">
+                      Array detected with{" "}
+                      <span className="font-black text-[var(--text-color-primary)]">
+                        {jsonPreview.count}
+                      </span>{" "}
+                      item(s).
+                    </p>
+                  )}
+                </div>
+              ) : null}
+
+              <div className="flex gap-3">
+                <button
+                  onClick={() => setIsJsonModalOpen(false)}
+                  className="flex-1 py-3 border border-[var(--border-color-primary)] rounded-xl text-[10px] font-black uppercase tracking-widest hover:bg-[var(--color-background-elevated)] transition-all"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleImportJson}
+                  disabled={jsonImportLoading}
+                  className="flex-1 py-3 bg-[var(--color-primary)] text-white rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-[var(--color-success-glow)] hover:brightness-110 transition-all disabled:opacity-60"
+                >
+                  {jsonImportLoading ? "Importing..." : "Import JSON"}
+                </button>
+              </div>
+            </div>
           </div>
-          <h2 className="text-5xl font-black text-[#064e3b] tracking-tighter italic uppercase">
-            ARENA{" "}
-            <span className="text-slate-300 not-italic font-thin">PROBLEMS</span>
+        </div>
+      ) : null}
+
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 px-2">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <FaCircle className="text-[var(--color-primary)] text-[8px] animate-pulse" />
+            <span className="text-[var(--color-primary)] text-[10px] font-black uppercase tracking-[0.3em]">
+              Admin Core
+            </span>
+          </div>
+          <h2 className="text-4xl font-black italic tracking-tighter uppercase text-[var(--text-color-primary)]">
+            Problem{" "}
+            <span className="text-[var(--text-color-muted)] not-italic font-thin">
+              Arena
+            </span>
           </h2>
         </div>
+        <div className="flex gap-2 w-full md:w-auto">
+          <button
+            onClick={() => setIsJsonModalOpen(true)}
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--color-background-soft)] text-[var(--text-color-primary)] px-5 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest border border-[var(--border-color-primary)] hover:bg-[var(--color-background-elevated)] transition-all"
+          >
+            <FaFileImport /> Import JSON
+          </button>
+          <button
+            onClick={openCreateEditor}
+            className="flex-1 md:flex-none flex items-center justify-center gap-2 bg-[var(--color-primary)] text-white px-6 py-3.5 rounded-2xl font-black text-[10px] uppercase tracking-widest hover:brightness-110 transition-all shadow-lg shadow-[var(--color-success-glow)]"
+          >
+            <FaPlus /> Create Problem
+          </button>
+        </div>
       </div>
 
-    
-      <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-5 rounded-[2.5rem] shadow-sm border border-slate-100">
-        <div className="relative w-full md:w-96">
-          <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />
-          <input 
-            type="text" 
-            placeholder="Search problems by name or category..."
-            className="w-full pl-12 pr-4 py-4 bg-[#f1f5f9] border-none rounded-2xl focus:ring-2 focus:ring-[#059669]/20 outline-none text-sm font-medium transition-all"
-            onChange={(e) => setSearchTerm(e.target.value)}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+        {[
+          {
+            label: "Total Problems",
+            val: problems.length,
+            color: "text-blue-500",
+          },
+          {
+            label: "Active",
+            val: String(problems.filter((item) => item.isActive).length),
+            color: "text-[var(--color-success)]",
+          },
+          {
+            label: "Drafts",
+            val: String(problems.filter((item) => !item.isActive).length),
+            color: "text-amber-500",
+          },
+          {
+            label: "Sync Status",
+            val: jsonImportLoading || listLoading ? "Syncing" : "Live",
+            color: "text-[var(--color-primary)]",
+          },
+        ].map((card, index) => (
+          <div
+            key={index}
+            className="bg-[var(--color-background-soft)] p-4 rounded-2xl border border-[var(--border-color-primary)]"
+          >
+            <p className="text-[9px] font-black uppercase text-[var(--text-color-muted)] mb-1">
+              {card.label}
+            </p>
+            <p className={`text-xl font-black ${card.color}`}>{card.val}</p>
+          </div>
+        ))}
+      </div>
+
+      <div className="flex flex-col md:flex-row gap-3 bg-[var(--color-background-soft)] p-3 rounded-2xl border border-[var(--border-color-primary)] shadow-sm">
+        <div className="relative flex-1">
+          <FaSearch className="absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-color-muted)]" />
+          <input
+            type="text"
+            placeholder="Search by title, slug, or tags..."
+            className="w-full pl-11 pr-4 py-2.5 bg-[var(--color-background-elevated)] border-none rounded-xl focus:ring-1 focus:ring-[var(--color-primary)] outline-none text-sm transition-all"
+            onChange={(event) => setSearchTerm(event.target.value)}
           />
         </div>
-        
-        <div className="flex items-center gap-3 w-full md:w-auto">
-          <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-4 border border-[#e5e7eb] rounded-2xl text-[#374151] font-black text-[10px] uppercase tracking-wider hover:bg-slate-50 transition-all">
-            <FaFilter /> Filter
-          </button>
-          <button className="flex-1 md:flex-none flex items-center justify-center gap-2 px-8 py-4 bg-[#059669] text-white rounded-2xl font-black text-[10px] uppercase tracking-widest hover:bg-[#065f46] shadow-lg shadow-emerald-100 transition-all active:scale-95">
-            <FaPlus /> Add Problem
-          </button>
-        </div>
+        <button className="flex items-center gap-2 px-4 py-2.5 bg-[var(--color-background-elevated)] rounded-xl text-[10px] font-black uppercase border border-[var(--border-color-primary)]">
+          <FaFilter /> Filter
+        </button>
       </div>
 
-   
-      <div className="grid grid-cols-1 gap-4">
-        {problems
-          .filter(p => p.question.toLowerCase().includes(searchTerm.toLowerCase()) || p.category.toLowerCase().includes(searchTerm.toLowerCase()))
-          .map((prob) => (
-          <div key={prob.id} className="group bg-white border border-[#e5e7eb] p-6 rounded-[2.5rem] hover:shadow-xl hover:shadow-slate-200/50 transition-all duration-300">
-            <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
-              
-              <div className="space-y-3 flex-1">
-                <div className="flex items-center gap-3">
-                  <span className="px-3 py-1 bg-[#f1f5f9] text-[#064e3b] text-[9px] font-black rounded-lg uppercase tracking-widest border border-slate-100">
-                    {prob.id}
+      {listError ? (
+        <div className="rounded-2xl bg-rose-500/10 border border-rose-500/20 px-4 py-3 text-rose-500 text-sm font-bold">
+          {listError}
+        </div>
+      ) : null}
+
+      <div className="grid gap-3">
+        {filteredProblems.map((problem) => (
+          <div
+            key={problem._id}
+            className="group bg-[var(--color-background-soft)] border border-[var(--border-color-primary)] p-4 rounded-2xl hover:border-[var(--color-primary)]/30 transition-all"
+          >
+            <div className="flex justify-between items-center">
+              <div className="space-y-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={`px-2 py-0.5 rounded text-[8px] font-black uppercase border ${problem.difficulty === "Easy" ? "bg-emerald-500/10 text-emerald-500 border-emerald-500/20" : problem.difficulty === "Medium" ? "bg-amber-500/10 text-amber-500 border-amber-500/20" : "bg-rose-500/10 text-rose-500 border-rose-500/20"}`}
+                  >
+                    {problem.difficulty}
                   </span>
-                  <span className={`px-3 py-1 border rounded-lg text-[9px] font-black uppercase tracking-widest ${getDifficultyColor(prob.difficulty)}`}>
-                    {prob.difficulty}
+                  <span className="text-[var(--text-color-muted)] text-[10px] font-mono">
+                    /{problem.slug}
                   </span>
-                  <div className="flex items-center gap-1 text-[#059669] text-[10px] font-black uppercase tracking-wider">
-                    <FaCheckDouble size={10}/> {prob.points} PTS
-                  </div>
                 </div>
-                <h3 className="text-xl font-bold text-[#064e3b] leading-tight tracking-tight group-hover:text-[#059669] transition-colors">
-                  {prob.question}
+                <h3 className="text-lg font-bold tracking-tight text-[var(--text-color-primary)]">
+                  {problem.title}
                 </h3>
-                <div className="flex items-center gap-4 text-[#9ca3af]">
-                  <div className="flex items-center gap-1.5 bg-slate-50 px-3 py-1 rounded-full">
-                    <FaBrain className="text-slate-400" size={10} />
-                    <span className="text-[10px] font-black uppercase tracking-tighter text-slate-500">{prob.category}</span>
-                  </div>
-                </div>
               </div>
 
-              <div className="flex items-center gap-2 self-end lg:self-center opacity-100 lg:opacity-0 lg:group-hover:opacity-100 translate-x-2 group-hover:translate-x-0 transition-all">
-                <button className="p-4 bg-[#ecfdf5] text-[#059669] rounded-2xl hover:bg-[#059669] hover:text-white hover:shadow-lg hover:shadow-emerald-100 transition-all">
-                  <FaEdit size={16} />
+              <div className="flex gap-2">
+                <button
+                  onClick={() => openEditEditor(problem._id)}
+                  disabled={detailLoading}
+                  className="p-3 bg-[var(--color-secondary)] text-[var(--color-primary)] rounded-xl hover:bg-[var(--color-primary)] hover:text-white transition-all disabled:opacity-60"
+                >
+                  <FaEdit size={14} />
                 </button>
-                <button className="p-4 bg-rose-50 text-rose-500 rounded-2xl hover:bg-rose-500 hover:text-white hover:shadow-lg hover:shadow-rose-100 transition-all">
-                  <FaTrash size={16} />
+                <button
+                  onClick={() => handleDelete(problem._id)}
+                  disabled={deletingId === problem._id}
+                  className="p-3 bg-[var(--color-danger-glow)] text-[var(--color-danger)] rounded-xl hover:bg-[var(--color-danger)] hover:text-white transition-all disabled:opacity-60"
+                >
+                  <FaTrash size={14} />
                 </button>
               </div>
-              
             </div>
           </div>
         ))}
       </div>
 
-   
-      <div className="flex flex-col md:flex-row items-center justify-between px-8 py-5 bg-[#064e3b] rounded-[2rem] text-white gap-4">
-        <div className="flex items-center gap-3">
-          <div className="p-2 bg-[#059669] rounded-lg">
-            <FaExclamationTriangle className="text-amber-400" size={14} />
-          </div>
-          <p className="text-[11px] font-black uppercase tracking-[0.2em]">
-            Database Sync Status: <span className="text-amber-400 ml-2">Active ({problems.length} Items)</span>
+      {!listLoading && filteredProblems.length === 0 ? (
+        <div className="bg-[var(--color-background-soft)] border border-[var(--border-color-primary)] rounded-2xl px-6 py-10 text-center">
+          <p className="text-sm font-bold text-[var(--text-color-muted)]">
+            No problems found for the current search.
           </p>
         </div>
-        <p className="text-[9px] font-black uppercase tracking-widest opacity-40">
-          Orbiton Arena v2.0 // Core Management
+      ) : null}
+
+      <div className="flex items-center justify-between px-6 py-3 bg-[var(--color-primary-dark)] rounded-2xl text-white/90">
+        <div className="flex items-center gap-3">
+          <FaDatabase className="text-amber-400" size={12} />
+          <p className="text-[9px] font-black uppercase tracking-widest">
+            DB Status: <span className="text-emerald-300">Active Node</span>
+          </p>
+        </div>
+        <p className="text-[8px] font-black opacity-40 uppercase tracking-[0.4em]">
+          Orbiton CX v2.0
         </p>
       </div>
     </div>

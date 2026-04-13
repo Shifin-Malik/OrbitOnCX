@@ -1,7 +1,10 @@
 import asyncHandler from "express-async-handler";
 import mongoose from "mongoose";
 import User from "../../models/userModel.js";
-import { getOnlineUserIds, getUsersOnlineState } from "../../services/presenceService.js";
+import {
+  getOnlineUserIds,
+  getUsersOnlineState,
+} from "../../services/presenceService.js";
 import {
   sendUserBlockedEmail,
   sendUserUnblockedEmail,
@@ -17,7 +20,13 @@ const escapeRegex = (value) => {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 };
 
-const buildUserMatch = ({ search, role, status, excludeUserId, onlineUserIds }) => {
+const buildUserMatch = ({
+  search,
+  role,
+  status,
+  excludeUserId,
+  onlineUserIds,
+}) => {
   const match = {};
 
   if (excludeUserId) {
@@ -43,7 +52,10 @@ const buildUserMatch = ({ search, role, status, excludeUserId, onlineUserIds }) 
       match.isDeleted = { $ne: true };
       match.isBlocked = false;
       match._id = match._id
-        ? { ...match._id, $in: onlineUserIds.map((id) => new mongoose.Types.ObjectId(id)) }
+        ? {
+            ...match._id,
+            $in: onlineUserIds.map((id) => new mongoose.Types.ObjectId(id)),
+          }
         : { $in: onlineUserIds.map((id) => new mongoose.Types.ObjectId(id)) };
     }
   }
@@ -93,7 +105,11 @@ const listUsersAggregation = async ({ match, sort, page, limit }) => {
       $addFields: {
         solvedQuestions: { $add: ["$easyCount", "$mediumCount", "$hardCount"] },
         status: {
-          $cond: [{ $eq: ["$isDeleted", true] }, "Deleted", { $cond: [{ $eq: ["$isBlocked", true] }, "Blocked", "Active"] }],
+          $cond: [
+            { $eq: ["$isDeleted", true] },
+            "Deleted",
+            { $cond: [{ $eq: ["$isBlocked", true] }, "Blocked", "Active"] },
+          ],
         },
         lastLogin: { $ifNull: ["$lastSeenAt", "$createdAt"] },
       },
@@ -199,12 +215,11 @@ export const getUsers = asyncHandler(async (req, res) => {
   });
 });
 
-// Backward-compat: GET /api/admin/all-users
+
 export const getAllUsers = asyncHandler(async (req, res) => {
   return getUsers(req, res);
 });
 
-// New: GET /api/admin/users/:id
 export const getUserByIdAdmin = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
@@ -213,29 +228,53 @@ export const getUserByIdAdmin = asyncHandler(async (req, res) => {
     throw new Error("Invalid user id");
   }
 
-  const user = await User.findById(id)
-    .select(
-      "_id name email avatar role isBlocked blockedAt isDeleted deletedAt createdAt updatedAt lastSeenAt followers following problemsSolved quizScore streak totalXp bio socialLinks",
-    )
-    .lean();
+  const userAggregation = await User.aggregate([
+    { 
+      $match: { _id: new mongoose.Types.ObjectId(id) } 
+    },
+    {
+      $project: {
+        _id: 1,
+        name: 1,
+        email: 1,
+        avatar: 1,
+        role: 1,
+        isBlocked: 1,
+        blockedAt: 1,
+        isDeleted: 1,
+        deletedAt: 1,
+        createdAt: 1,
+        updatedAt: 1,
+        lastSeenAt: 1,
+        quizScore: 1,
+        streak: 1,
+        totalXp: 1,
+        bio: 1,
+        socialLinks: 1,
+        
+        followersCount: { $size: { $ifNull: ["$followers", []] } },
+        followingCount: { $size: { $ifNull: ["$following", []] } },
+        easyCount: { $size: { $ifNull: ["$problemsSolved.easy", []] } },
+        mediumCount: { $size: { $ifNull: ["$problemsSolved.medium", []] } },
+        hardCount: { $size: { $ifNull: ["$problemsSolved.hard", []] } }
+      }
+    }
+  ]);
 
-  if (!user) {
+  if (!userAggregation || userAggregation.length === 0) {
     res.status(404);
     throw new Error("User not found");
   }
 
-  const followersCount = Array.isArray(user.followers) ? user.followers.length : 0;
-  const followingCount = Array.isArray(user.following) ? user.following.length : 0;
-  const easyCount = Array.isArray(user.problemsSolved?.easy) ? user.problemsSolved.easy.length : 0;
-  const mediumCount = Array.isArray(user.problemsSolved?.medium) ? user.problemsSolved.medium.length : 0;
-  const hardCount = Array.isArray(user.problemsSolved?.hard) ? user.problemsSolved.hard.length : 0;
-  const solvedQuestions = easyCount + mediumCount + hardCount;
+  const user = userAggregation[0];
+  const solvedQuestions = user.easyCount + user.mediumCount + user.hardCount;
 
   let isOnline = false;
   try {
     const onlineStates = await getUsersOnlineState([id]);
     isOnline = Boolean(onlineStates[String(id)]?.isOnline);
   } catch (e) {
+    console.error("Error fetching online state:", e);
     isOnline = false;
   }
 
@@ -252,17 +291,12 @@ export const getUserByIdAdmin = asyncHandler(async (req, res) => {
             ? "Online"
             : "Active",
       lastLogin: user.lastSeenAt || user.createdAt,
-      followersCount,
-      followingCount,
-      easyCount,
-      mediumCount,
-      hardCount,
       solvedQuestions,
     },
   });
 });
 
-// New: PATCH /api/admin/users/:id/block
+
 export const blockUser = asyncHandler(async (req, res) => {
   const { id } = req.params;
 
@@ -290,7 +324,9 @@ export const blockUser = asyncHandler(async (req, res) => {
     id,
     { $set: { isBlocked: true, blockedAt: new Date() } },
     { new: true, runValidators: true },
-  ).select("_id name email role isBlocked isDeleted blockedAt createdAt updatedAt lastSeenAt avatar");
+  ).select(
+    "_id name email role isBlocked isDeleted blockedAt createdAt updatedAt lastSeenAt avatar",
+  );
 
   if (!updated) {
     res.status(404);
@@ -299,7 +335,9 @@ export const blockUser = asyncHandler(async (req, res) => {
 
   const io = req.app.get("io");
   if (io) {
-    io.to(`user:${String(updated._id)}`).emit("user:blocked", { userId: String(updated._id) });
+    io.to(`user:${String(updated._id)}`).emit("user:blocked", {
+      userId: String(updated._id),
+    });
     io.in(`user:${String(updated._id)}`).disconnectSockets(true);
   }
 
@@ -355,7 +393,9 @@ export const unblockUser = asyncHandler(async (req, res) => {
     id,
     { $set: { isBlocked: false, blockedAt: null } },
     { new: true, runValidators: true },
-  ).select("_id name email role isBlocked isDeleted blockedAt createdAt updatedAt lastSeenAt avatar");
+  ).select(
+    "_id name email role isBlocked isDeleted blockedAt createdAt updatedAt lastSeenAt avatar",
+  );
 
   if (!updated) {
     res.status(404);
@@ -408,7 +448,9 @@ export const softDeleteUserAdmin = asyncHandler(async (req, res) => {
     id,
     { $set: { isDeleted: true, deletedAt: new Date() } },
     { new: true, runValidators: true },
-  ).select("_id name email role avatar isDeleted deletedAt isBlocked blockedAt createdAt updatedAt lastSeenAt");
+  ).select(
+    "_id name email role avatar isDeleted deletedAt isBlocked blockedAt createdAt updatedAt lastSeenAt",
+  );
 
   if (!updated) {
     res.status(404);
@@ -417,7 +459,9 @@ export const softDeleteUserAdmin = asyncHandler(async (req, res) => {
 
   const io = req.app.get("io");
   if (io) {
-    io.to(`user:${String(updated._id)}`).emit("user:deleted", { userId: String(updated._id) });
+    io.to(`user:${String(updated._id)}`).emit("user:deleted", {
+      userId: String(updated._id),
+    });
     io.in(`user:${String(updated._id)}`).disconnectSockets(true);
   }
 
@@ -493,7 +537,7 @@ export const updateUserRole = asyncHandler(async (req, res) => {
   });
 });
 
-// Backward-compat for any existing wiring (previously toggled a non-schema `status`)
+
 export const toggleUserStatus = asyncHandler(async (req, res) => {
   const user = await User.findById(req.params.id).select(
     "_id name email role isBlocked createdAt lastSeenAt avatar",
@@ -534,4 +578,3 @@ export const softDeleteUser = asyncHandler(async (req, res) => {
   res.status(501);
   throw new Error("Soft delete is not implemented");
 });
-

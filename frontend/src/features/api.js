@@ -53,7 +53,7 @@ export const getDraftAPI = (userId, language) =>
     params: { userId, language },
   });
 
-// --- Problems ---
+
 export const getProblemsAPI = (params) => API.get("/problems", { params });
 export const getProblemBySlugAPI = (slug) => API.get(`/problems/${slug}`);
 export const runProblemAPI = (slug, data) => API.post(`/problems/${slug}/run`, data);
@@ -66,7 +66,7 @@ export const getProblemDraftAPI = (slug, params) =>
 export const saveProblemDraftAPI = (slug, data) =>
   API.put(`/problems/${slug}/draft`, data);
 
-// --- Discussions ---
+
 export const getProblemDiscussionsAPI = (problemId) =>
   API.get(`/problems/${problemId}/discussions`);
 export const postProblemDiscussionAPI = (problemId, data) =>
