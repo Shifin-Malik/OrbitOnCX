@@ -45,6 +45,7 @@ export const googleAuth = (accessToken) =>
   API.post("/users/google", { access_token: accessToken });
 
 export const executeCodeAPI = (data) => API.post("/users/execute", data);
+export const askAiChatAPI = (data) => API.post("/ai/chat", data);
 
 export const saveDraftAPI = (data) => API.post("/users/save-draft", data);
 

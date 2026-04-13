@@ -11,6 +11,7 @@ import connectCloudinary from "./config/cloudinary.js";
 import { connectRedis } from "./config/redis.js";
 import userRoutes from "./routes/userRoutes/userRoute.js";
 import adminRoutes from "./routes/adminRoutes/adminRoute.js";
+import aiRoutes from "./routes/aiRoutes/aiRoute.js";
 import problemRoutes from "./routes/problemRoutes/problemRoutes.js";
 import discussionRoutes from "./routes/discussionRoutes/discussionRoutes.js";
 import errorHandler from "./middlewares/errorMiddleware.js";
@@ -35,6 +36,7 @@ app.use(
 
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
+app.use("/api/ai", aiRoutes);
 app.use("/api/problems", problemRoutes);
 app.use("/api", discussionRoutes);
 

@@ -71,7 +71,6 @@ function App() {
     "/search",
     "/quiz",
     "/leetcode",
-    "/compiler",
     "/profile/:id",
   ];
 
