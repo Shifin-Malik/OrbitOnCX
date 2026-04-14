@@ -74,7 +74,7 @@ function App() {
     "/profile/:id",
   ];
 
-  // NavBar is visible only on userPaths AND if the user is NOT an admin
+  
   const isNavBarVisible =
     user?.role !== "admin" &&
     userPaths.some((path) => matchPath({ path, end: true }, location.pathname));
@@ -84,8 +84,7 @@ function App() {
       {isNavBarVisible && <NavBar />}
 
       <Routes>
-        {/* --- Public/Landing Route --- */}
-        {/* If an Admin hits '/', redirect them to their dashboard automatically */}
+       
         <Route
           path="/"
           element={
@@ -93,7 +92,7 @@ function App() {
           }
         />
 
-        {/* --- User Routes (All protected from Admins) --- */}
+      
         <Route path="/compiler" element={<Compiler />} />
         <Route
           path="/profile"
@@ -160,7 +159,6 @@ function App() {
           }
         />
 
-        {/* --- Admin Routes (All protected from Users) --- */}
         <Route
           path="/admin"
           element={

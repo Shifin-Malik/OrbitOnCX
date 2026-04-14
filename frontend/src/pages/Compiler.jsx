@@ -194,13 +194,7 @@ const Compiler = () => {
     );
   };
 
-  if (authLoading || (user?._id && loadingDraft && !isInitialized)) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[var(--color-background)]">
-        <div className="w-12 h-12 border-4 border-[var(--color-primary)] border-t-transparent rounded-full animate-spin"></div>
-      </div>
-    );
-  }
+  if (authLoading) return null;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 pt-2 font-sans bg-[var(--color-background)] text-[var(--text-color-primary)] transition-colors duration-300">

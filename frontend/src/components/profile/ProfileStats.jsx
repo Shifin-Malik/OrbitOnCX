@@ -3,26 +3,26 @@ import ModernBar from "./ModernBar";
 
 const ProfileStats = ({ user }) => {
   const solved = user?.stats?.totalSolved || 1000;
-  const total = 3865;
+  const total = 150;
   const offset = 502 - 502 * (solved / total);
 
   const items = [
     {
       label: "Easy",
-      solved: user?.stats?.easySolved || 1000,
-      total: 930,
+      solved: user?.stats?.easySolved || 0,
+      total: 50,
       color: "bg-emerald-400",
     },
     {
       label: "Medium",
-      solved: user?.stats?.mediumSolved || 1000,
-      total: 2022,
+      solved: user?.stats?.mediumSolved || 0,
+      total: 50,
       color: "bg-amber-400",
     },
     {
       label: "Hard",
-      solved: user?.stats?.hardSolved || 700,
-      total: 913,
+      solved: user?.stats?.hardSolved || 0,
+      total: 50,
       color: "bg-rose-400",
     },
   ];

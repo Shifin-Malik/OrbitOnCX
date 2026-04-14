@@ -28,6 +28,7 @@ const ProfileDropdown = ({ handleAction }) => {
     }, 600);
   };
 
+  console.log(user);
   return (
     <div className="absolute right-5 mt-[46%] w-[20rem] bg-background-soft/95 border border-primary/20 rounded-2xl shadow-[0_20px_50px_rgba(0,0,0,0.4)] p-[1.15rem] z-50 animate-in fade-in zoom-in duration-200 backdrop-blur-xl ring-1 ring-white/5 origin-top-right">
       <div className="flex items-center gap-3.5 mb-5 px-1">
@@ -60,20 +61,20 @@ const ProfileDropdown = ({ handleAction }) => {
       <div className="flex justify-between items-center bg-white/3 backdrop-blur-md rounded-2xl py-3.5 px-2 mb-6 border border-white/5 shadow-[inset_0_1px_1px_rgba(255,255,255,0.05)]">
         {[
           {
-            label: "Points",
+            label: "Total Problem So",
             val:
-              (user?.problemsSolved?.easy?.length || 0) +
+              user?.stats.totalSolved +
               (user?.problemsSolved?.medium?.length || 0),
+            color: "text-primary",
+          },
+          {
+            label: "Quiz XP",
+            val: `${user?.totalXp}xp` || 0,
             color: "text-primary",
           },
           {
             label: "Streak",
             val: `${user?.streak || 0}🔥`,
-            color: "text-primary",
-          },
-          {
-            label: "Rank",
-            val: "#1.2k",
             color: "text-primary",
           },
         ].map((stat, i) => (

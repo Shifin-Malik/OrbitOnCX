@@ -5,7 +5,6 @@ import toast, { Toaster } from "react-hot-toast";
 import { FaGithub, FaLinkedin, FaLock, FaUpload } from "react-icons/fa";
 
 import ActivityHeatmap from "../components/ActivityHeatmap";
-import StreakCard from "../components/profile/StreakCard.jsx";
 import Modal from "../components/common/Modal";
 import InputField from "../components/common/InputField";
 import ProfileSidebar from "../components/profile/ProfileSidebar";
@@ -117,7 +116,6 @@ function ProfilePage() {
 
         <main className="lg:col-span-8 space-y-2">
           <ProfileStats user={user} />
-          <StreakCard streak={streak} />
           <ActivityHeatmap userActivities={activities} />
         </main>
       </div>

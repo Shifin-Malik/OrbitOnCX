@@ -9,14 +9,16 @@ import {
 
 export const runProblem = createAsyncThunk(
   "submissions/runProblem",
-  async ({ slug, language, code }, thunkAPI) => {
+  async ({ slug, language, code, stdin, testcaseIndex }, thunkAPI) => {
     try {
-      const res = await runProblemAPI(slug, { language, code });
+      const payload = { language, code };
+      if (typeof stdin === "string") payload.stdin = stdin;
+      if (Number.isInteger(testcaseIndex)) payload.testcaseIndex = testcaseIndex;
+
+      const res = await runProblemAPI(slug, payload);
       return res.data;
     } catch (e) {
-      return thunkAPI.rejectWithValue(
-        e.response?.data?.message || "Run failed",
-      );
+      return thunkAPI.rejectWithValue(e.response?.data?.message || "Run failed");
     }
   },
 );
@@ -28,9 +30,7 @@ export const submitProblem = createAsyncThunk(
       const res = await submitProblemAPI(slug, { language, code });
       return res.data;
     } catch (e) {
-      return thunkAPI.rejectWithValue(
-        e.response?.data?.message || "Submit failed",
-      );
+      return thunkAPI.rejectWithValue(e.response?.data?.message || "Submit failed");
     }
   },
 );
@@ -80,7 +80,7 @@ export const saveProblemDraft = createAsyncThunk(
 const initialState = {
   running: false,
   submitting: false,
-  output: null, // run result
+  output: null,
   submitResult: null,
   error: null,
 
@@ -91,6 +91,7 @@ const initialState = {
   draftLoading: false,
   draftSaving: false,
   draftError: null,
+  draftLanguage: "",
   draft: { code: "", hasDraft: false, starterCode: "" },
 };
 
@@ -112,7 +113,6 @@ const submissionSlice = createSlice({
       .addCase(runProblem.pending, (state) => {
         state.running = true;
         state.error = null;
-        state.output = null;
       })
       .addCase(runProblem.fulfilled, (state, { payload }) => {
         state.running = false;
@@ -125,7 +125,6 @@ const submissionSlice = createSlice({
       .addCase(submitProblem.pending, (state) => {
         state.submitting = true;
         state.error = null;
-        state.submitResult = null;
       })
       .addCase(submitProblem.fulfilled, (state, { payload }) => {
         state.submitting = false;
@@ -153,11 +152,13 @@ const submissionSlice = createSlice({
       })
       .addCase(fetchProblemDraft.fulfilled, (state, { payload }) => {
         state.draftLoading = false;
+        state.draftLanguage = payload?.language || "";
         state.draft = payload || { code: "", hasDraft: false, starterCode: "" };
       })
-      .addCase(fetchProblemDraft.rejected, (state, { payload }) => {
+      .addCase(fetchProblemDraft.rejected, (state, action) => {
         state.draftLoading = false;
-        state.draftError = payload || "Failed to load draft";
+        state.draftLanguage = action.meta?.arg?.language || "";
+        state.draftError = action.payload || "Failed to load draft";
       })
       .addCase(saveProblemDraft.pending, (state) => {
         state.draftSaving = true;
@@ -175,4 +176,3 @@ const submissionSlice = createSlice({
 
 export const { clearRunOutput, clearSubmitResult } = submissionSlice.actions;
 export default submissionSlice.reducer;
-
