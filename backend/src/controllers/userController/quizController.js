@@ -1,5 +1,4 @@
 import mongoose from "mongoose";
-
 import Quiz from "../../models/QuizModel.js";
 import Question from "../../models/QuestionModel.js";
 import QuizAttempt from "../../models/QuizAttempt.js";

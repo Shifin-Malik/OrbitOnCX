@@ -109,7 +109,7 @@ const Dashboard = () => {
         </div>
 
         {/* Content Distribution (1/3 width) */}
-        <div className="rounded-[2rem] border border-[var(--border-color-primary)] bg-[var(--color-background-soft)]/30 p-6 flex flex-col justify-between">
+        {/* <div className="rounded-[2rem] border border-[var(--border-color-primary)] bg-[var(--color-background-soft)]/30 p-6 flex flex-col justify-between">
           <div>
             <h3 className="text-sm font-black uppercase tracking-widest flex items-center gap-2 mb-6">
               <FaShapes className="text-blue-400" /> Platform Mix
@@ -144,7 +144,7 @@ const Dashboard = () => {
               <p className="text-[9px] font-black uppercase tracking-[0.2em] text-[var(--text-color-muted)]">All nodes operational</p>
             </div>
           </div>
-        </div>
+        </div> */}
 
       </div>
     </div>

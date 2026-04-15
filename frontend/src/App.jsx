@@ -10,7 +10,6 @@ import { useDispatch, useSelector } from "react-redux";
 import { getProfile } from "./features/auth/authSlice";
 import { sendHeartbeat } from "./features/presence/presenceSlice";
 
-// User Pages
 import Home from "./pages/Home";
 import NavBar from "./components/NavBar";
 import ProfilePage from "./pages/ProfilePage";
@@ -24,14 +23,12 @@ import UserProfilePage from "./components/UserProfilePage";
 import QuizArena from "./components/quizz/QuizArena";
 import MissionDebrief from "./components/quizz/MissionDebrief";
 
-// Admin Pages & Layouts
 import AdminLayout from "./layouts/AdminLayout";
 import Dashboard from "./pages/admin/Dashboard";
 import UserManagement from "./pages/admin/UserManagement";
 import QuizManagement from "./pages/admin/QuizManagement";
 import ProblemManagement from "./pages/admin/ProblemManagement";
 
-// Protection Utilities
 import ProtectedRoute from "./utils/ProtectedRoute";
 import AdminRoute from "./utils/AdminRoute";
 

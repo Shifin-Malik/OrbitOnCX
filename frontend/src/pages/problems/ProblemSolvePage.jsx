@@ -102,8 +102,7 @@ const ProblemSolvePage = () => {
     draftLanguage,
   } = useSelector((state) => state.submissions);
 
-  console.log(activeProblem);
-
+ 
   const [leftTab, setLeftTab] = useState("description");
   const [bottomTab, setBottomTab] = useState("testcase");
   const [resultMode, setResultMode] = useState("run");
@@ -665,7 +664,7 @@ const ProblemSolvePage = () => {
           }
         >
           <div className="h-full bg-[var(--color-background-soft)] border border-[var(--border-color-primary)] rounded-3xl overflow-hidden flex flex-col">
-            <div className="px-5 py-4 border-b border-[var(--border-color-primary)] bg-[var(--color-background-elevated)] flex items-center justify-between gap-4">
+            <div className="px-5 py-2 border-b border-[var(--border-color-primary)] bg-[var(--color-background-elevated)] flex items-center justify-between gap-4">
               <div className="flex items-center gap-3 min-w-0">
                 <button
                   onClick={() => navigate("/leetcode")}
@@ -779,7 +778,7 @@ const ProblemSolvePage = () => {
           </div>
 
           <div className="h-full bg-[var(--color-background-soft)] border border-[var(--border-color-primary)] rounded-3xl overflow-hidden flex flex-col">
-            <div className="px-5 py-4 border-b border-[var(--border-color-primary)] bg-[var(--color-background-elevated)] flex flex-wrap items-center justify-between gap-3">
+            <div className="px-5 py-2 border-b border-[var(--border-color-primary)] bg-[var(--color-background-elevated)] flex flex-wrap items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="text-[10px] font-black uppercase tracking-widest text-[var(--text-color-muted)]">
                   Language
@@ -827,7 +826,7 @@ const ProblemSolvePage = () => {
 
             <div
               ref={rightBodyRef}
-              className="flex-1 grid"
+              className="flex-1 min-h-0 grid"
               style={
                 isLgUp && typeof editorHeightPx === "number"
                   ? {
@@ -903,7 +902,7 @@ const ProblemSolvePage = () => {
                   </div>
                 </div>
 
-                <div className="flex-1 overflow-y-auto p-4 font-mono text-xs">
+                <div className="flex-1 overflow-y-auto p-4 font-mono text-xs custom-scrollbar">
                   {bottomTab === "testcase" ? (
                     <div className="space-y-4">
                       {visibleTestCases.length > 0 ? (

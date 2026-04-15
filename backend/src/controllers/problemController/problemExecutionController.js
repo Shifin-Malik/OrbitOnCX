@@ -3,94 +3,26 @@ import asyncHandler from "express-async-handler";
 import Problem from "../../models/ProblemModel.js";
 import Submission from "../../models/SubmissionModel.js";
 import {
-  evaluateTestCase,
-  normalizeJudgeStatus,
-  runJudge0,
-} from "../../services/judge0Service.js";
+  createVerdictFromStatus,
+  executeTestCase,
+  executeTestCasesSequentially,
+  normalizeOutputForDisplay,
+  resolveActualOutputForStatus,
+  runSolutionWithJudge0,
+} from "../../services/problemJudgingService.js";
+import { normalizeJudgeStatus } from "../../services/judge0Service.js";
 import { applyAcceptedSolve } from "../../services/solveTrackingService.js";
 
 const MAX_CODE_LENGTH = 200000;
 const MAX_STDIN_LENGTH = 50000;
 
-const STATUS_VERDICT_MAP = {
-  accepted: "Accepted",
-  wrong_answer: "Wrong Answer",
-  runtime_error: "Runtime Error",
-  compile_error: "Compile Error",
-  time_limit_exceeded: "Time Limit Exceeded",
-  internal_error: "Internal Error",
-};
-
-const toVerdict = (status) => STATUS_VERDICT_MAP[status] || "Runtime Error";
-
-const normalizeText = (value) => {
-  if (value === null || value === undefined) return "";
-  return String(value).replace(/\r\n/g, "\n").trimEnd();
-};
-
 const normalizeLanguage = (value) => String(value || "").trim().toLowerCase();
-const toFiniteNumber = (value) => {
-  const num = Number(value);
-  return Number.isFinite(num) ? num : null;
-};
-
-const sanitizeJudgeResponse = (judge) => {
-  if (!judge || typeof judge !== "object") return null;
-
-  const {
-    stdout,
-    stderr,
-    compile_output,
-    message,
-    status,
-    time,
-    memory,
-    exit_code,
-    exit_signal,
-  } = judge;
-
-  return {
-    stdout,
-    stderr,
-    compile_output,
-    message,
-    status,
-    time,
-    memory,
-    exit_code,
-    exit_signal,
-  };
-};
 
 const isSupportedLanguage = (problem, language) => {
   const supported = Array.isArray(problem?.supportedLanguages)
     ? problem.supportedLanguages
     : [];
   return supported.map((item) => normalizeLanguage(item)).includes(language);
-};
-
-const getTestCaseExpectedOutput = (testCase = {}) =>
-  testCase.output ?? testCase.expectedOutput ?? "";
-
-const normalizeRunResult = (run) => {
-  const statusId = Number(run?.raw?.status?.id ?? run?.statusId ?? 0);
-
-  return {
-    status: {
-      id: statusId,
-      description:
-        run?.raw?.status?.description || run?.statusDescription || "Unknown",
-    },
-    stdout: normalizeText(run?.stdout),
-    stderr: normalizeText(run?.stderr),
-    compile_output: normalizeText(
-      run?.compileOutput ?? run?.raw?.compile_output,
-    ),
-    message: normalizeText(run?.raw?.message || run?.message),
-    time:
-      run?.time !== undefined && run?.time !== null ? String(run.time) : "",
-    memory: run?.memory ?? null,
-  };
 };
 
 const validateRunBody = ({ language, code, stdin, testcaseIndex }, res) => {
@@ -163,6 +95,45 @@ const validateSubmitBody = ({ language, code }, res) => {
   };
 };
 
+const buildRunResultPayload = ({
+  statusId,
+  statusDescription,
+  stdout,
+  stderr,
+  compileOutput,
+  message,
+  time,
+  memory,
+}) => ({
+  status: {
+    id: Number(statusId || 0),
+    description: statusDescription || "Unknown",
+  },
+  stdout: normalizeOutputForDisplay(stdout),
+  stderr: normalizeOutputForDisplay(stderr),
+  compile_output: normalizeOutputForDisplay(compileOutput),
+  message: normalizeOutputForDisplay(message),
+  time: time !== undefined && time !== null ? String(time) : "",
+  memory: memory ?? null,
+});
+
+const buildTestcaseMeta = (details = {}) => ({
+  testcaseIndex:
+    Number.isInteger(details.testcaseIndex) && details.testcaseIndex >= 0
+      ? details.testcaseIndex
+      : null,
+  expectedOutput: normalizeOutputForDisplay(details.expectedOutput),
+  actualOutput: normalizeOutputForDisplay(details.actualOutput),
+  verdict: createVerdictFromStatus(details.status),
+  status: details.status || "internal_error",
+  source: details.source || "hidden_testcase",
+  matched:
+    typeof details.matched === "boolean"
+      ? details.matched
+      : details.status === "accepted",
+  message: normalizeOutputForDisplay(details.message),
+});
+
 export const runProblem = asyncHandler(async (req, res) => {
   const { slug } = req.params;
   const payload = validateRunBody(req.body || {}, res);
@@ -201,62 +172,119 @@ export const runProblem = asyncHandler(async (req, res) => {
     Object.prototype.hasOwnProperty.call(req.body || {}, "stdin") &&
     typeof payload.stdin === "string";
 
-  const resolvedInput = hasCustomInput
-    ? payload.stdin
-    : selectedVisibleCase?.input || "";
-  const runSource = hasCustomInput ? "custom_input" : "visible_testcase";
+  if (!hasCustomInput && !selectedVisibleCase) {
+    res.status(400);
+    throw new Error("No visible testcases configured for this problem");
+  }
 
-  const run = await runJudge0({
+  if (!hasCustomInput && selectedVisibleCase) {
+    const testcaseIndex =
+      payload.testcaseIndex !== null ? payload.testcaseIndex : 0;
+
+    const evaluated = await executeTestCase({
+      language: payload.language,
+      sourceCode: payload.code,
+      testCase: selectedVisibleCase,
+      testcaseIndex,
+      source: "visible_testcase",
+    });
+
+    const testcaseDetails = buildTestcaseMeta({
+      testcaseIndex,
+      expectedOutput: evaluated.expectedOutput,
+      actualOutput: evaluated.actualOutput,
+      status: evaluated.status,
+      source: "visible_testcase",
+      matched: evaluated.matched,
+      message: evaluated.message,
+    });
+
+    return res.status(200).json({
+      success: true,
+      result: buildRunResultPayload({
+        statusId: evaluated.statusId,
+        statusDescription: evaluated.statusDescription,
+        stdout: evaluated.stdout,
+        stderr: evaluated.stderr,
+        compileOutput: evaluated.compileOutput,
+        message: evaluated.message,
+        time: evaluated.time,
+        memory: evaluated.memory,
+      }),
+      testcaseResults: [testcaseDetails],
+      run: {
+        source: "visible_testcase",
+        testcaseIndex,
+        status: evaluated.status,
+        verdict: evaluated.verdict,
+        expectedOutput: evaluated.expectedOutput,
+        actualOutput: evaluated.actualOutput,
+        matchedExpected: evaluated.matched,
+        testcase: testcaseDetails,
+      },
+    });
+  }
+
+  const run = await runSolutionWithJudge0({
     language: payload.language,
     sourceCode: payload.code,
-    stdin: resolvedInput,
+    input: payload.stdin || "",
   });
 
-  const result = normalizeRunResult(run);
-
-  const baseStatus = normalizeJudgeStatus({
-    statusId: result.status.id,
-    hasCompileOutput: !!result.compile_output,
-    hasStderr: !!result.stderr,
+  const status = normalizeJudgeStatus({
+    statusId: run.statusId,
+    hasCompileOutput: !!run.compileOutput,
+    hasStderr: !!run.stderr,
   });
 
-  const expectedOutput = runSource === "visible_testcase" && selectedVisibleCase
-    ? getTestCaseExpectedOutput(selectedVisibleCase)
-    : null;
+  const testcaseDetails = buildTestcaseMeta({
+    testcaseIndex: null,
+    expectedOutput: "",
+    actualOutput: resolveActualOutputForStatus({
+      status,
+      stdout: run.stdout,
+      stderr: run.stderr,
+      compileOutput: run.compileOutput,
+      message: run?.raw?.message || run?.message,
+    }),
+    status,
+    source: "custom_input",
+    matched: null,
+    message: run?.raw?.message || run?.message || "",
+  });
 
-  const actualOutput = normalizeText(result.stdout);
-
-  const outputMatchesVisibleCase =
-    runSource === "visible_testcase" && selectedVisibleCase && baseStatus === "accepted"
-      ? normalizeText(expectedOutput) === actualOutput
-      : null;
-
-  const runStatus =
-    outputMatchesVisibleCase === false ? "wrong_answer" : baseStatus;
-
-  res.status(200).json({
+  return res.status(200).json({
     success: true,
-    result,
+    result: buildRunResultPayload({
+      statusId: run.statusId,
+      statusDescription: run.statusDescription,
+      stdout: run.stdout,
+      stderr: run.stderr,
+      compileOutput: run.compileOutput,
+      message: run?.raw?.message || run?.message,
+      time: run.time,
+      memory: run.memory,
+    }),
+    testcaseResults: [testcaseDetails],
     run: {
-      source: runSource,
-      testcaseIndex:
-        runSource === "visible_testcase"
-          ? selectedVisibleCase && payload.testcaseIndex !== null
-            ? payload.testcaseIndex
-            : selectedVisibleCase
-              ? 0
-              : null
-          : null,
-      status: runStatus,
-      verdict: toVerdict(runStatus),
-      expectedOutput,
-      actualOutput,
-      matchedExpected: outputMatchesVisibleCase,
+      source: "custom_input",
+      testcaseIndex: null,
+      status,
+      verdict: createVerdictFromStatus(status),
+      expectedOutput: "",
+      actualOutput: testcaseDetails.actualOutput,
+      matchedExpected: null,
+      testcase: testcaseDetails,
     },
   });
 });
 
 export const submitProblem = asyncHandler(async (req, res) => {
+  if (!req.user?._id) {
+    res.status(401);
+    throw new Error("Login required to submit problem code");
+  }
+
   const { slug } = req.params;
   const payload = validateSubmitBody(req.body || {}, res);
 
@@ -277,68 +305,22 @@ export const submitProblem = asyncHandler(async (req, res) => {
   const hiddenTestCases = Array.isArray(problem.hiddenTestCases)
     ? problem.hiddenTestCases
     : [];
-  const visibleTestCases = Array.isArray(problem.visibleTestCases)
-    ? problem.visibleTestCases
-    : [];
 
-  const useHiddenTestCases = hiddenTestCases.length > 0;
-  const testCases = useHiddenTestCases ? hiddenTestCases : visibleTestCases;
-
-  if (!testCases.length) {
+  if (!hiddenTestCases.length) {
     res.status(400);
-    throw new Error("No testcases configured for this problem");
+    throw new Error("No hidden testcases configured for this problem");
   }
 
-  let finalStatus = "accepted";
-  let isAccepted = true;
-  let runtime = null;
-  let memory = null;
-  let judgeResponse = null;
-  let failedCase = null;
-  let passedCount = 0;
+  const execution = await executeTestCasesSequentially({
+    language: payload.language,
+    sourceCode: payload.code,
+    testCases: hiddenTestCases,
+    source: "hidden_testcase",
+    stopOnFirstFailure: true,
+  });
 
-  for (let index = 0; index < testCases.length; index += 1) {
-    const testCase = testCases[index];
-    const expectedOutput = getTestCaseExpectedOutput(testCase);
-
-    // eslint-disable-next-line no-await-in-loop
-    const result = await evaluateTestCase({
-      language: payload.language,
-      sourceCode: payload.code,
-      input: testCase.input,
-      expectedOutput,
-    });
-
-    const nextRuntime = toFiniteNumber(result.time);
-    const nextMemory = toFiniteNumber(result.memory);
-    runtime = nextRuntime === null ? runtime : Math.max(runtime ?? 0, nextRuntime);
-    memory = nextMemory === null ? memory : Math.max(memory ?? 0, nextMemory);
-    judgeResponse = sanitizeJudgeResponse(result.judge);
-
-    if (result.isAccepted) {
-      passedCount += 1;
-      continue;
-    }
-
-    finalStatus = result.status;
-    isAccepted = false;
-
-    failedCase = {
-      index: index + 1,
-      input: useHiddenTestCases ? "" : testCase.input || "",
-      expectedOutput: useHiddenTestCases ? "" : expectedOutput || "",
-      actualOutput: useHiddenTestCases ? "" : result.actualOutput || "",
-      message: useHiddenTestCases
-        ? "Failed on hidden testcase"
-        : result.message || "Execution failed",
-      status: result.status,
-      verdict: toVerdict(result.status),
-    };
-
-    break;
-  }
-
-  const totalCount = testCases.length;
+  const finalStatus = execution.status;
+  const isAccepted = execution.isAccepted;
 
   const submission = await Submission.create({
     user: req.user._id,
@@ -347,11 +329,14 @@ export const submitProblem = asyncHandler(async (req, res) => {
     code: payload.code,
     status: finalStatus,
     isAccepted,
-    runtime,
-    memory,
-    judgeResponse,
-    failedTestCaseSummary: failedCase
-      ? { failedAt: failedCase.index - 1, status: finalStatus }
+    runtime: execution.runtime,
+    memory: execution.memory,
+    judgeResponse: execution.judgeResponse,
+    failedTestCaseSummary: execution.firstFailedTestcase
+      ? {
+          failedAt: execution.firstFailedTestcase.testcaseIndex,
+          status: finalStatus,
+        }
       : null,
   });
 
@@ -381,25 +366,44 @@ export const submitProblem = asyncHandler(async (req, res) => {
     });
   }
 
+  const firstFailed = execution.firstFailedTestcase
+    ? {
+        index: execution.firstFailedTestcase.testcaseIndex + 1,
+        testcaseIndex: execution.firstFailedTestcase.testcaseIndex,
+        expectedOutput: execution.firstFailedTestcase.expectedOutput,
+        actualOutput: execution.firstFailedTestcase.actualOutput,
+        verdict: execution.firstFailedTestcase.verdict,
+        status: execution.firstFailedTestcase.status,
+        source: execution.firstFailedTestcase.source,
+        message: execution.firstFailedTestcase.message,
+      }
+    : null;
+
   res.status(200).json({
     success: true,
     status: finalStatus,
+    verdict: createVerdictFromStatus(finalStatus),
     isAccepted,
+    testcaseResults: execution.testcaseResults,
+    firstFailedTestcase: firstFailed,
     submission: {
       _id: submission._id,
       createdAt: submission.createdAt,
       language: submission.language,
       status: submission.status,
       isAccepted: submission.isAccepted,
-      verdict: toVerdict(finalStatus),
-      passedCount,
-      totalCount,
+      verdict: createVerdictFromStatus(finalStatus),
+      passedCount: execution.passedCount,
+      totalCount: execution.totalCount,
       runtime:
-        runtime !== undefined && runtime !== null ? String(runtime) : "",
-      memory,
-      failedCase,
+        execution.runtime !== undefined && execution.runtime !== null
+          ? String(execution.runtime)
+          : "",
+      memory: execution.memory,
+      failedCase: firstFailed,
+      testcaseResults: execution.testcaseResults,
       failedTestCaseSummary: submission.failedTestCaseSummary,
-      usedHiddenTestCases: useHiddenTestCases,
+      usedHiddenTestCases: true,
     },
     streak: streakUpdate,
   });

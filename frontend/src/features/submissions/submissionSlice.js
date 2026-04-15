@@ -113,9 +113,11 @@ const submissionSlice = createSlice({
       .addCase(runProblem.pending, (state) => {
         state.running = true;
         state.error = null;
+        state.output = null;
       })
       .addCase(runProblem.fulfilled, (state, { payload }) => {
         state.running = false;
+        state.error = null;
         state.output = payload;
       })
       .addCase(runProblem.rejected, (state, { payload }) => {
@@ -125,9 +127,11 @@ const submissionSlice = createSlice({
       .addCase(submitProblem.pending, (state) => {
         state.submitting = true;
         state.error = null;
+        state.submitResult = null;
       })
       .addCase(submitProblem.fulfilled, (state, { payload }) => {
         state.submitting = false;
+        state.error = null;
         state.submitResult = payload;
       })
       .addCase(submitProblem.rejected, (state, { payload }) => {
