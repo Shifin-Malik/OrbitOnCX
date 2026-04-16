@@ -71,7 +71,6 @@ router.post("/google", googleAuth);
 // --- Profile Routes ---
 router.get("/profile", protect, getProfile);
 router.put("/profile", protect, uploadAvatar.single("avatar"), updateProfile);
-router.get("/profile/:id", protect, getUserById);
 router.get("/search-users", protect, searchUsers);
 router.get("/search-history", protect, getSearchHistory);
 router.post("/search-history", protect, addToSearchHistory);
@@ -103,6 +102,7 @@ router.get("/profile/problem-stats", protect, getProblemStats);
 router.get("/profile/activity", protect, getActivity);
 router.get("/profile/streak", protect, getStreak);
 router.get("/profile/submissions", protect, getRecentSubmissions);
+router.get("/profile/:id", protect, getUserById);
 
 // --- Presence / Active Users ---
 router.patch("/heartbeat", protect, heartbeat);

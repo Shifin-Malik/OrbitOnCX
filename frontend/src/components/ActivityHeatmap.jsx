@@ -4,6 +4,7 @@ import { Tooltip } from "react-tooltip";
 import "react-calendar-heatmap/dist/styles.css";
 import "react-tooltip/dist/react-tooltip.css";
 
+
 const customStyles = `
   .heatmap-card {
     background: var(--color-background-soft);
@@ -72,25 +73,21 @@ const customStyles = `
   }
 `;
 
-const ActivityHeatmap = ({ userActivities }) => {
+const ActivityHeatmap = ({ userActivities, totalAcceptedSubmissions }) => {
   const today = new Date();
-  const startDate = new Date();
-  startDate.setFullYear(today.getFullYear() - 1);
+  const startDate = new Date(today);
+  startDate.setDate(startDate.getDate() - 364);
 
-  const generateDummyData = () => {
-    const data = [];
-    for (let i = 0; i < 80; i++) {
-      const date = new Date();
-      date.setDate(date.getDate() - Math.floor(Math.random() * 300));
-      data.push({
-        date: date.toISOString().split("T")[0],
-        count: Math.floor(Math.random() * 5),
-      });
-    }
-    return data;
-  };
-
-  const values = userActivities || generateDummyData();
+  const values = Array.isArray(userActivities) ? userActivities : [];
+  const computedTotalSubmissions = values.reduce(
+    (sum, item) => sum + (Number(item?.count) || 0),
+    0,
+  );
+  const totalSubmissions =
+    Number.isFinite(Number(totalAcceptedSubmissions)) &&
+    Number(totalAcceptedSubmissions) >= 0
+      ? Number(totalAcceptedSubmissions)
+      : computedTotalSubmissions;
 
   return (
     <div className="heatmap-card">
@@ -102,7 +99,7 @@ const ActivityHeatmap = ({ userActivities }) => {
           <h3>Activity Overview</h3>
         </div>
         <span className="text-[11px] font-bold text-muted uppercase tracking-wider">
-          {values.length} submissions in the last year
+          {totalSubmissions} submissions in the last year
         </span>
       </div>
 
@@ -112,8 +109,8 @@ const ActivityHeatmap = ({ userActivities }) => {
         values={values}
         classForValue={(value) => {
           if (!value || value.count === 0) return "color-empty";
-          if (value.count >= 4) return "level-4";
-          if (value.count >= 3) return "level-2"; 
+          if (value.count >= 6) return "level-4";
+          if (value.count >= 4) return "level-3";
           if (value.count >= 2) return "level-2";
           return "level-1";
         }}
@@ -122,7 +119,7 @@ const ActivityHeatmap = ({ userActivities }) => {
             return { "data-tooltip-content": "No activity" };
           return {
             "data-tooltip-id": "heatmap-tooltip",
-            "data-tooltip-content": `${value.date}: ${value.count} solved`,
+            "data-tooltip-content": `${value.date}: ${value.count} accepted submission${value.count === 1 ? "" : "s"}`,
           };
         }}
       />

@@ -1,8 +1,16 @@
 import asyncHandler from "express-async-handler";
-import DailyActivity from "../../models/DailyActivityModel.js";
+import mongoose from "mongoose";
 import Submission from "../../models/SubmissionModel.js";
-import { getUTCDateKey } from "../../utlis/dayKey.js";
 import User from "../../models/UserModel.js";
+
+const ACCEPTED_STATUS_VALUES = [
+  "accepted",
+  "Accepted",
+  "ACCEPTED",
+  "success",
+  "Success",
+  "SUCCESS",
+];
 
 export const getProblemStats = asyncHandler(async (req, res) => {
   const user = await User.findById(req.user._id).select(
@@ -32,22 +40,66 @@ export const getProblemStats = asyncHandler(async (req, res) => {
 });
 
 export const getActivity = asyncHandler(async (req, res) => {
-  const end = new Date();
-  const start = new Date();
-  start.setUTCDate(start.getUTCDate() - 365);
+  const now = new Date();
+  const userId =
+    req.user?._id instanceof mongoose.Types.ObjectId
+      ? req.user._id
+      : new mongoose.Types.ObjectId(String(req.user?._id));
 
-  const startKey = getUTCDateKey(start);
-  const activities = await DailyActivity.find({
-    user: req.user._id,
-    dayKey: { $gte: startKey },
-  })
-    .select("dayKey acceptedCount -_id")
-    .sort({ dayKey: 1 })
-    .lean();
+  const startDate = new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()),
+  );
+  startDate.setUTCDate(startDate.getUTCDate() - 364);
+
+  const activity = await Submission.aggregate([
+    {
+      $match: {
+        user: userId,
+        createdAt: {
+          $gte: startDate,
+          $lte: now,
+        },
+        $or: [
+          { isAccepted: true },
+          { status: { $in: ACCEPTED_STATUS_VALUES } },
+          { verdict: { $in: ACCEPTED_STATUS_VALUES } },
+        ],
+      },
+    },
+    {
+      $group: {
+        _id: {
+          $dateToString: {
+            format: "%Y-%m-%d",
+            date: "$createdAt",
+            timezone: "UTC",
+          },
+        },
+        count: { $sum: 1 },
+      },
+    },
+    { $sort: { _id: 1 } },
+    {
+      $project: {
+        _id: 0,
+        date: "$_id",
+        count: 1,
+      },
+    },
+  ]);
+
+  const totalAcceptedSubmissions = activity.reduce(
+    (sum, entry) => sum + (Number(entry.count) || 0),
+    0,
+  );
+  const activeDays = activity.length;
 
   res.status(200).json({
     success: true,
-    activities: activities.map((a) => ({ date: a.dayKey, count: a.acceptedCount })),
+    activity,
+    activities: activity,
+    totalAcceptedSubmissions,
+    activeDays,
   });
 });
 

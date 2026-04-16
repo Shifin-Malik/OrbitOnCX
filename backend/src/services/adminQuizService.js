@@ -4,7 +4,6 @@ import Question from "../models/QuestionModel.js";
 import {
   isObjectLike,
   parseJsonIfString,
-  normalizeQuizInput,
 } from "../validators/quizAdminValidator.js";
 
 const isString = (value) => typeof value === "string";
@@ -43,19 +42,6 @@ export const parseRequestPayload = (rawBody = {}) => {
     questions,
     hasQuestions,
   };
-};
-
-export const parseBulkQuizItems = (rawItems) => {
-  const parsed = parseJsonIfString(rawItems);
-  if (!Array.isArray(parsed)) return [];
-
-  return parsed.map((item) => {
-    const payload = parseRequestPayload(item);
-    return {
-      quizData: payload.quizData,
-      questions: payload.questions,
-    };
-  });
 };
 
 export const parsePositiveInt = (value, fallback) => {
@@ -209,16 +195,3 @@ export const syncQuizQuestions = async (quizId, incomingQuestions = []) => {
   };
 };
 
-export const findDuplicateQuizTitles = async (titles = []) => {
-  if (!Array.isArray(titles) || titles.length === 0) {
-    return new Set();
-  }
-
-  const uniqueTitles = [...new Set(titles.map((title) => title.trim()))];
-  const existing = await Quiz.find({ title: { $in: uniqueTitles } })
-    .collation({ locale: "en", strength: 2 })
-    .select("title")
-    .lean();
-
-  return new Set(existing.map((quiz) => normalizeQuizInput(quiz).title.toLowerCase()));
-};

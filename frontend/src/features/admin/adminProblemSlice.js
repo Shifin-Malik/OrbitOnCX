@@ -6,6 +6,8 @@ import {
   deleteProblemAPI,
   getAdminProblemsAPI,
   getProblemByIdAPI,
+  previewProblemPdfImportAPI,
+  saveProblemPdfImportAPI,
   toggleProblemStatusAPI,
   updateProblemFromJsonAPI,
   updateProblemAPI,
@@ -103,6 +105,38 @@ export const importAdminProblemsFromJsonBulk = createAsyncThunk(
   },
 );
 
+export const previewAdminProblemPdfImport = createAsyncThunk(
+  "adminProblem/previewAdminProblemPdfImport",
+  async (formData, thunkAPI) => {
+    try {
+      const { data } = await previewProblemPdfImportAPI(formData);
+      return data?.data;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error?.response?.data || getErrorMessage(error, "Failed to parse PDF"),
+      );
+    }
+  },
+);
+
+export const saveAdminProblemPdfImport = createAsyncThunk(
+  "adminProblem/saveAdminProblemPdfImport",
+  async ({ problems, mode }, thunkAPI) => {
+    try {
+      const payload = {
+        problems: Array.isArray(problems) ? problems : [],
+        mode,
+      };
+      const { data } = await saveProblemPdfImportAPI(payload);
+      return data;
+    } catch (error) {
+      return thunkAPI.rejectWithValue(
+        error?.response?.data || getErrorMessage(error, "Failed to save PDF import"),
+      );
+    }
+  },
+);
+
 export const updateProblemFromJson = createAsyncThunk(
   "adminProblem/updateProblemFromJson",
   async ({ problemId, payload }, thunkAPI) => {
@@ -193,6 +227,14 @@ const initialState = {
   jsonImportLoading: false,
   jsonImportError: null,
   jsonImportSummary: null,
+
+  pdfPreview: null,
+  pdfPreviewLoading: false,
+  pdfPreviewError: null,
+
+  pdfSaveLoading: false,
+  pdfSaveError: null,
+  pdfImportSummary: null,
 };
 
 const adminProblemSlice = createSlice({
@@ -219,6 +261,14 @@ const adminProblemSlice = createSlice({
       state.submitError = null;
       state.actionError = null;
       state.jsonImportError = null;
+      state.pdfPreviewError = null;
+      state.pdfSaveError = null;
+    },
+    clearProblemPdfPreview: (state) => {
+      state.pdfPreview = null;
+      state.pdfPreviewError = null;
+      state.pdfSaveError = null;
+      state.pdfImportSummary = null;
     },
   },
   extraReducers: (builder) => {
@@ -312,6 +362,40 @@ const adminProblemSlice = createSlice({
         state.jsonImportSummary = action.payload?.summary || null;
       })
 
+      .addCase(previewAdminProblemPdfImport.pending, (state) => {
+        state.pdfPreviewLoading = true;
+        state.pdfPreviewError = null;
+        state.pdfImportSummary = null;
+      })
+      .addCase(previewAdminProblemPdfImport.fulfilled, (state, action) => {
+        state.pdfPreviewLoading = false;
+        state.pdfPreview = action.payload || null;
+      })
+      .addCase(previewAdminProblemPdfImport.rejected, (state, action) => {
+        state.pdfPreviewLoading = false;
+        state.pdfPreview = null;
+        state.pdfPreviewError = action.payload;
+      })
+
+      .addCase(saveAdminProblemPdfImport.pending, (state) => {
+        state.pdfSaveLoading = true;
+        state.pdfSaveError = null;
+      })
+      .addCase(saveAdminProblemPdfImport.fulfilled, (state, action) => {
+        state.pdfSaveLoading = false;
+        state.pdfPreview = null;
+        const createdItems = Array.isArray(action.payload?.data?.created)
+          ? action.payload.data.created
+          : [];
+        createdItems.forEach((item) => upsertProblemInList(state, item));
+        state.pdfImportSummary = action.payload?.data?.summary || null;
+      })
+      .addCase(saveAdminProblemPdfImport.rejected, (state, action) => {
+        state.pdfSaveLoading = false;
+        state.pdfSaveError = action.payload;
+        state.pdfImportSummary = action.payload?.data?.summary || null;
+      })
+
       .addCase(updateProblemFromJson.pending, (state) => {
         state.jsonImportLoading = true;
         state.jsonImportError = null;
@@ -383,6 +467,7 @@ export const {
   setAdminProblemLimit,
   clearSelectedAdminProblem,
   clearAdminProblemErrors,
+  clearProblemPdfPreview,
 } = adminProblemSlice.actions;
 
 export default adminProblemSlice.reducer;

@@ -1,6 +1,6 @@
 import { Server } from "socket.io";
 import jwt from "jsonwebtoken";
-import User from "../models/UserModel.js";
+import User from "../models/userModel.js";
 import {
   setUserOffline,
   setUserOnline,

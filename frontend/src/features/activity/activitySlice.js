@@ -6,7 +6,18 @@ export const fetchActivity = createAsyncThunk(
   async (_, thunkAPI) => {
     try {
       const res = await getActivityAPI();
-      return res.data.activities || [];
+      const activity = res.data.activity || res.data.activities || [];
+      const totalAcceptedSubmissions = Number(
+        res.data.totalAcceptedSubmissions ??
+          activity.reduce((sum, item) => sum + (Number(item?.count) || 0), 0),
+      );
+      const activeDays = Number(res.data.activeDays ?? activity.length);
+
+      return {
+        activity,
+        totalAcceptedSubmissions,
+        activeDays,
+      };
     } catch (e) {
       return thunkAPI.rejectWithValue(
         e.response?.data?.message || "Failed to load activity",
@@ -45,6 +56,8 @@ export const fetchProblemStats = createAsyncThunk(
 
 const initialState = {
   activities: [],
+  totalAcceptedSubmissions: 0,
+  activeDays: 0,
   streak: null,
   stats: null,
   loading: false,
@@ -63,7 +76,10 @@ const activitySlice = createSlice({
       })
       .addCase(fetchActivity.fulfilled, (state, action) => {
         state.loading = false;
-        state.activities = action.payload;
+        state.activities = action.payload.activity || [];
+        state.totalAcceptedSubmissions =
+          action.payload.totalAcceptedSubmissions || 0;
+        state.activeDays = action.payload.activeDays || 0;
       })
       .addCase(fetchActivity.rejected, (state, action) => {
         state.loading = false;

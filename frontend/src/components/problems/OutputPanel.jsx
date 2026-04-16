@@ -412,10 +412,10 @@ const OutputPanel = ({
         </div>
 
         <div className="grid grid-cols-2 gap-4">
-          <TextBlock title="Stdout" value={run.stdout} />
+          {/* <TextBlock title="Stdout" value={run.stdout} />
           <TextBlock title="Stderr" value={run.stderr} />
           <TextBlock title="Compile Output" value={run.compileOutput} />
-          <TextBlock title="Message" value={run.message} />
+          <TextBlock title="Message" value={run.message} /> */}
         </div>
 
         {shouldShowExpectedActual ? (

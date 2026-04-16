@@ -34,7 +34,11 @@ const AVATAR_STYLES = [
 
 function ProfilePage() {
   const { user } = useSelector((state) => state.auth);
-  const { activities, streak } = useSelector((state) => state.activity);
+  const { activities, totalAcceptedSubmissions } = useSelector(
+    (state) => state.activity,
+  );
+
+  console.log(activities, totalAcceptedSubmissions);
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);
@@ -116,7 +120,10 @@ function ProfilePage() {
 
         <main className="lg:col-span-8 space-y-2">
           <ProfileStats user={user} />
-          <ActivityHeatmap userActivities={activities} />
+          <ActivityHeatmap
+            userActivities={activities}
+            totalAcceptedSubmissions={totalAcceptedSubmissions}
+          />
         </main>
       </div>
 

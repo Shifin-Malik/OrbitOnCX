@@ -11,7 +11,6 @@ import {
 import { getDashboardStats } from "../../controllers/adminController/dashboardController.js";
 
 import {
-  bulkCreateQuizzes,
   commitQuizPdfImport,
   createQuiz,
   deleteQuiz,
@@ -37,6 +36,8 @@ import {
   deleteProblem,
   getAdminProblems,
   getProblemById,
+  previewProblemPdfImport,
+  saveProblemPdfImport,
   toggleProblemStatus,
   updateProblem,
   updateProblemFromJson,
@@ -68,7 +69,6 @@ router.get("/dashboard/stats", getDashboardStats);
 // --- Quiz Management ---
 router.post("/quizzes", uploadQuiz.single("thumbnail"), createQuiz);
 router.get("/quizzes", getAllQuizzes);
-router.post("/quizzes/bulk", bulkCreateQuizzes);
 router.post(
   "/quizzes/import/pdf/preview",
   uploadQuizPdf.single("file"),
@@ -94,6 +94,12 @@ router.delete("/questions/:id", deleteQuestion);
 router.post("/problems", createProblem);
 router.post("/problems/json", createProblemFromJson);
 router.post("/problems/json/bulk", createProblemsFromJsonBulk);
+router.post(
+  "/problems/import/pdf/preview",
+  uploadQuizPdf.single("file"),
+  previewProblemPdfImport,
+);
+router.post("/problems/import/pdf/save", saveProblemPdfImport);
 router.get("/problems", getAdminProblems);
 router.get("/problems/:id", getProblemById);
 router.put("/problems/:id", updateProblem);

@@ -1,28 +1,53 @@
-import React from "react";
+import React, { useEffect } from "react";
 import ModernBar from "./ModernBar";
+import { useDispatch, useSelector } from "react-redux";
+import { fetchProblems } from "../../features/problems/problemSlice";
 
 const ProfileStats = ({ user }) => {
-  const solved = user?.stats?.totalSolved || 1000;
-  const total = 150;
-  const offset = 502 - 502 * (solved / total);
+  const dispatch = useDispatch();
+
+  const { list, total, loadingList, listError } = useSelector(
+    (state) => state.problems,
+  );
+
+  useEffect(() => {
+    dispatch(fetchProblems({ page: 1, limit: 100 }));
+  }, [dispatch]);
+
+  console.log("Problems list:", list);
+  console.log("Problems count in list:", list.length);
+  console.log("Total problems in DB:", total);
+
+  const solved = user?.stats?.totalSolved || 0;
+  const totalProblems = total || list.length || 100;
+  const offset = 502 - 502 * (solved / totalProblems);
+  const easyTotal = list.filter(
+    (problem) => problem.difficulty === "Easy",
+  ).length;
+  const mediumTotal = list.filter(
+    (problem) => problem.difficulty === "Medium",
+  ).length;
+  const hardTotal = list.filter(
+    (problem) => problem.difficulty === "Hard",
+  ).length;
 
   const items = [
     {
       label: "Easy",
       solved: user?.stats?.easySolved || 0,
-      total: 50,
+      total: easyTotal,
       color: "bg-emerald-400",
     },
     {
       label: "Medium",
       solved: user?.stats?.mediumSolved || 0,
-      total: 50,
+      total: mediumTotal,
       color: "bg-amber-400",
     },
     {
       label: "Hard",
       solved: user?.stats?.hardSolved || 0,
-      total: 50,
+      total: hardTotal,
       color: "bg-rose-400",
     },
   ];
@@ -35,6 +60,9 @@ const ProfileStats = ({ user }) => {
           Performance Overview
         </h3>
       </header>
+
+      {loadingList && <p>Loading problems...</p>}
+      {listError && <p className="text-red-500">{listError}</p>}
 
       <div className="grid md:grid-cols-2 gap-16 items-center">
         <div className="relative flex justify-center scale-110 md:scale-125">
@@ -61,13 +89,15 @@ const ProfileStats = ({ user }) => {
               className="text-primary transition-all duration-1000"
             />
           </svg>
+
           <div className="absolute inset-0 flex flex-col items-center justify-center">
             <span className="text-5xl font-black">{solved}</span>
             <span className="text-[10px] font-black uppercase opacity-40 mt-1">
-              Solved
+              Solved / {totalProblems}
             </span>
           </div>
         </div>
+
         <div className="space-y-7">
           {items.map((item) => (
             <ModernBar key={item.label} {...item} />

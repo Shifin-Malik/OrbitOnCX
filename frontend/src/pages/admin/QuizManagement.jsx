@@ -15,8 +15,6 @@ import {
 import { toast } from "react-hot-toast";
 import QuizCreation from "../../components/admin/QuizCreation";
 import {
-  bulkCreateAdminQuizzes,
-  clearBulkResult,
   clearPdfPreview,
   commitAdminQuizPdf,
   createAdminQuiz,
@@ -41,7 +39,6 @@ const QuizManagement = () => {
     submitting,
     deletingId,
     togglingId,
-    bulkLoading,
     pdfPreview,
     pdfPreviewLoading,
     pdfCommitLoading,
@@ -71,7 +68,9 @@ const QuizManagement = () => {
         if (currentQuizzes.length === 1 && currentPage > 1) {
           setCurrentPage((prev) => prev - 1);
         } else {
-          dispatch(fetchAdminQuizzes({ page: currentPage, limit: itemsPerPage }));
+          dispatch(
+            fetchAdminQuizzes({ page: currentPage, limit: itemsPerPage }),
+          );
         }
       } catch (error) {
         toast.error(error || "Failed to delete quiz");
@@ -119,49 +118,17 @@ const QuizManagement = () => {
 
       dispatch(fetchAdminQuizzes({ page: currentPage, limit: itemsPerPage }));
       dispatch(clearPdfPreview());
-      dispatch(clearBulkResult());
       setActiveView(null);
     } catch (error) {
       toast.error(error || "Failed to save quiz");
     }
   };
 
-  const handleBulkCreate = async (bulkPayload) => {
-    const requestBody = Array.isArray(bulkPayload)
-      ? { quizzes: bulkPayload }
-      : bulkPayload;
-
-    try {
-      const result = await dispatch(
-        bulkCreateAdminQuizzes(requestBody),
-      ).unwrap();
-
-      const successCount = result?.summary?.successCount || 0;
-      const failedCount = result?.summary?.failedCount || 0;
-
-      if (successCount > 0) {
-        toast.success(`${successCount} quiz(s) created`);
-      }
-
-      if (failedCount > 0) {
-        toast.error(`${failedCount} item(s) failed validation`);
-      }
-
-      dispatch(fetchAdminQuizzes({ page: currentPage, limit: itemsPerPage }));
-      if (successCount > 0 && failedCount === 0) {
-        setActiveView(null);
-      }
-
-      return result;
-    } catch (error) {
-      const message =
-        error?.message || error?.failed?.[0]?.errors?.[0] || "Bulk import failed";
-      toast.error(message);
-      throw error;
-    }
-  };
-
-  const handlePreviewPdf = async ({ file, defaultDifficulty }) => {
+  const handlePreviewPdf = async ({
+    file,
+    defaultDifficulty,
+    defaultCategory,
+  }) => {
     const formData = new FormData();
     formData.append("file", file);
 
@@ -173,6 +140,10 @@ const QuizManagement = () => {
       formData.append("defaultDifficulty", defaultDifficulty);
     }
 
+    if (defaultCategory) {
+      formData.append("defaultCategory", defaultCategory);
+    }
+
     const preview = await dispatch(previewAdminQuizPdf(formData)).unwrap();
     toast.success(
       `PDF parsed: ${preview?.meta?.validCount || 0} valid question(s)`,
@@ -180,11 +151,15 @@ const QuizManagement = () => {
     return preview;
   };
 
-  const handleCommitPdfImport = async ({ quizData, questions }) => {
+  const handleCommitPdfImport = async ({ quizData, questions, mode }) => {
     const payload =
       activeView?.mode === "edit" && activeView?.quizId
-        ? { quizId: activeView.quizId, questions }
+        ? { quizId: activeView.quizId, quizData, questions }
         : { quizData, questions };
+
+    if (mode) {
+      payload.mode = mode;
+    }
 
     const data = await dispatch(commitAdminQuizPdf(payload)).unwrap();
     toast.success("PDF import saved successfully");
@@ -204,25 +179,20 @@ const QuizManagement = () => {
   if (activeView) {
     const isEditMode = activeView.mode === "edit";
     const isEditLoading =
-      isEditMode &&
-      (detailLoading || selectedQuiz?._id !== activeView.quizId);
+      isEditMode && (detailLoading || selectedQuiz?._id !== activeView.quizId);
 
     return (
       <QuizCreation
         editData={isEditMode ? selectedQuiz : null}
         isEditLoading={isEditLoading}
-        isSubmitting={
-          submitting || bulkLoading || pdfPreviewLoading || pdfCommitLoading
-        }
+        isSubmitting={submitting || pdfPreviewLoading || pdfCommitLoading}
         pdfPreview={pdfPreview}
         onClearPdfPreview={() => dispatch(clearPdfPreview())}
         onBack={() => {
           dispatch(clearPdfPreview());
-          dispatch(clearBulkResult());
           setActiveView(null);
         }}
         onSave={handleSave}
-        onBulkCreate={handleBulkCreate}
         onPreviewPdf={handlePreviewPdf}
         onCommitPdfImport={handleCommitPdfImport}
       />
@@ -258,7 +228,6 @@ const QuizManagement = () => {
         <button
           onClick={() => {
             dispatch(clearPdfPreview());
-            dispatch(clearBulkResult());
             setActiveView({ mode: "create" });
           }}
           className="group flex items-center gap-2.5 bg-[var(--color-primary)] text-white px-7 py-3.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--color-primary-dark)] transition-all shadow-lg shadow-[var(--color-success-glow)]"
@@ -304,9 +273,7 @@ const QuizManagement = () => {
                 >
                   <td className="px-9 py-5">
                     <div className="flex items-center gap-4">
-                      <div className="h-12 w-12 rounded-xl bg-[var(--color-secondary)] border border-[var(--color-primary)]/10 text-[var(--color-primary)] flex items-center justify-center font-black text-lg">
-                        {quiz.title?.charAt(0) || "Q"}
-                      </div>
+                      <img src={quiz.thumbnail} alt="" className="w-9" />
                       <div>
                         <p className="text-[15px] font-bold text-[var(--text-color-primary)] group-hover/row:text-[var(--color-primary)] transition-colors">
                           {quiz.title || "Untitled Quiz"}
@@ -347,7 +314,8 @@ const QuizManagement = () => {
                       onClick={() => handleToggleStatus(quiz)}
                       disabled={togglingId === quiz._id}
                       className={`inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg border text-[9px] font-black tracking-widest uppercase 
-                      ${quiz.isActive
+                      ${
+                        quiz.isActive
                           ? "bg-[var(--color-success-glow)] border-[var(--color-success)]/20 text-[var(--color-success)]"
                           : "bg-[var(--color-background-elevated)] border-[var(--border-color-primary)] text-[var(--text-color-muted)]"
                       } disabled:opacity-60`}

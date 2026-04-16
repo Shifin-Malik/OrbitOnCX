@@ -2,7 +2,6 @@ import { createAsyncThunk, createSlice } from "@reduxjs/toolkit";
 import {
   addAdminQuizQuestionAPI,
   bulkAddAdminQuizQuestionsAPI,
-  bulkCreateAdminQuizzesAPI,
   commitAdminQuizPdfAPI,
   createAdminQuizAPI,
   deleteAdminQuizAPI,
@@ -125,21 +124,6 @@ export const toggleAdminQuizStatus = createAsyncThunk(
   },
 );
 
-export const bulkCreateAdminQuizzes = createAsyncThunk(
-  "adminQuiz/bulkCreateAdminQuizzes",
-  async (payload, thunkAPI) => {
-    try {
-      const body = Array.isArray(payload) ? { quizzes: payload } : payload;
-      const { data } = await bulkCreateAdminQuizzesAPI(body);
-      return data;
-    } catch (error) {
-      return thunkAPI.rejectWithValue(
-        error?.response?.data || getErrorMessage(error, "Bulk import failed"),
-      );
-    }
-  },
-);
-
 export const previewAdminQuizPdf = createAsyncThunk(
   "adminQuiz/previewAdminQuizPdf",
   async (formData, thunkAPI) => {
@@ -246,10 +230,6 @@ const initialState = {
   togglingId: null,
   actionError: null,
 
-  bulkLoading: false,
-  bulkResult: null,
-  bulkError: null,
-
   pdfPreview: null,
   pdfPreviewLoading: false,
   pdfPreviewError: null,
@@ -272,16 +252,11 @@ const adminQuizSlice = createSlice({
       state.pdfPreview = null;
       state.pdfPreviewError = null;
     },
-    clearBulkResult: (state) => {
-      state.bulkResult = null;
-      state.bulkError = null;
-    },
     clearAdminQuizErrors: (state) => {
       state.listError = null;
       state.detailError = null;
       state.submitError = null;
       state.actionError = null;
-      state.bulkError = null;
       state.pdfPreviewError = null;
       state.pdfCommitError = null;
       state.questionActionError = null;
@@ -380,19 +355,6 @@ const adminQuizSlice = createSlice({
       .addCase(toggleAdminQuizStatus.rejected, (state, action) => {
         state.togglingId = null;
         state.actionError = action.payload;
-      })
-
-      .addCase(bulkCreateAdminQuizzes.pending, (state) => {
-        state.bulkLoading = true;
-        state.bulkError = null;
-      })
-      .addCase(bulkCreateAdminQuizzes.fulfilled, (state, action) => {
-        state.bulkLoading = false;
-        state.bulkResult = action.payload;
-      })
-      .addCase(bulkCreateAdminQuizzes.rejected, (state, action) => {
-        state.bulkLoading = false;
-        state.bulkError = action.payload;
       })
 
       .addCase(previewAdminQuizPdf.pending, (state) => {
@@ -508,7 +470,6 @@ const adminQuizSlice = createSlice({
 export const {
   clearSelectedQuiz,
   clearPdfPreview,
-  clearBulkResult,
   clearAdminQuizErrors,
 } = adminQuizSlice.actions;
 

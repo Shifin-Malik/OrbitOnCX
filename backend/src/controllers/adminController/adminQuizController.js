@@ -6,19 +6,20 @@ import {
   ensureValidObjectId,
   normalizePagination,
   parseRequestPayload,
-  parseBulkQuizItems,
   appendQuestionsToQuiz,
   syncQuizQuestions,
-  findDuplicateQuizTitles,
 } from "../../services/adminQuizService.js";
 import {
+  QUIZ_CATEGORIES,
   QUIZ_DIFFICULTIES,
   parseBoolean,
   validateQuestionsArray,
   validateQuizInput,
 } from "../../validators/quizAdminValidator.js";
 import {
-  extractTextFromPdfBuffer,
+  OCR_FALLBACK_USED_WARNING,
+  UNREADABLE_SCANNED_PDF_MESSAGE,
+  extractQuizTextWithOcrFallback,
   parseQuizQuestionsFromText,
 } from "../../services/quizPdfImportService.js";
 
@@ -78,6 +79,105 @@ const resolveMergedQuizInput = (existingQuiz, incoming = {}, filePath = "") => (
   isActive:
     incoming.isActive !== undefined ? incoming.isActive : existingQuiz.isActive,
 });
+
+const normalizeImportMode = (value) =>
+  String(value || "").trim().toLowerCase() === "publish" ? "publish" : "draft";
+
+const resolveImportModeFromRequest = ({ mode, quizData, fallbackIsActive }) => {
+  if (mode !== undefined) {
+    return normalizeImportMode(mode);
+  }
+
+  if (quizData?.isActive !== undefined) {
+    return parseBoolean(quizData.isActive, false) ? "publish" : "draft";
+  }
+
+  return fallbackIsActive ? "publish" : "draft";
+};
+
+const normalizeQuestionFingerprint = (question = {}) => {
+  const normalize = (value) =>
+    String(value || "")
+      .trim()
+      .toLowerCase()
+      .replace(/[ ]{2,}/g, " ");
+
+  const q = normalize(question.q);
+  const options = Array.isArray(question.options)
+    ? question.options.map((option) => normalize(option)).join("||")
+    : "";
+  const answer = normalize(question.correctAnswer);
+
+  return `${q}::${options}::${answer}`;
+};
+
+const dedupeQuestionsAgainstQuiz = async (quizId, questions = []) => {
+  if (!Array.isArray(questions) || questions.length === 0) {
+    return {
+      uniqueQuestions: [],
+      skippedDuplicateQuestions: 0,
+    };
+  }
+
+  const existingQuestions = await Question.find({ quizId })
+    .select("q options correctAnswer")
+    .lean();
+
+  const seen = new Set(
+    existingQuestions
+      .map((question) => normalizeQuestionFingerprint(question))
+      .filter(Boolean),
+  );
+
+  const uniqueQuestions = [];
+  let skippedDuplicateQuestions = 0;
+
+  questions.forEach((question) => {
+    const fingerprint = normalizeQuestionFingerprint(question);
+    if (!fingerprint) {
+      return;
+    }
+
+    if (seen.has(fingerprint)) {
+      skippedDuplicateQuestions += 1;
+      return;
+    }
+
+    seen.add(fingerprint);
+    uniqueQuestions.push(question);
+  });
+
+  return {
+    uniqueQuestions,
+    skippedDuplicateQuestions,
+  };
+};
+
+const dedupeQuestionList = (questions = []) => {
+  const seen = new Set();
+  const uniqueQuestions = [];
+  let skippedDuplicateQuestions = 0;
+
+  questions.forEach((question) => {
+    const fingerprint = normalizeQuestionFingerprint(question);
+    if (!fingerprint) {
+      return;
+    }
+
+    if (seen.has(fingerprint)) {
+      skippedDuplicateQuestions += 1;
+      return;
+    }
+
+    seen.add(fingerprint);
+    uniqueQuestions.push(question);
+  });
+
+  return {
+    uniqueQuestions,
+    skippedDuplicateQuestions,
+  };
+};
 
 export const createQuiz = asyncHandler(async (req, res) => {
   const { quizData, questions, hasQuestions } = parseRequestPayload(req.body);
@@ -310,162 +410,6 @@ export const toggleQuizStatus = asyncHandler(async (req, res) => {
   });
 });
 
-export const bulkCreateQuizzes = asyncHandler(async (req, res) => {
-  const rawItems = req.body?.quizzes ?? req.body;
-  const items = parseBulkQuizItems(rawItems);
-
-  if (!Array.isArray(items) || items.length === 0) {
-    return res.status(400).json({
-      success: false,
-      message: "quizzes must be a non-empty array.",
-    });
-  }
-
-  const failed = [];
-  const validItems = [];
-
-  items.forEach((item, index) => {
-    const quizValidation = validateQuizInput(item.quizData, {
-      requireAllRequiredFields: true,
-      pathPrefix: `quizzes[${index}]`,
-    });
-
-    const questionValidation = validateQuestionsArray(item.questions || [], {
-      pathPrefix: `quizzes[${index}].questions`,
-      allowEmpty: true,
-    });
-
-    const errors = [...quizValidation.errors, ...questionValidation.errors];
-    if (errors.length > 0) {
-      failed.push({
-        index,
-        title: quizValidation.value.title || null,
-        errors,
-      });
-      return;
-    }
-
-    validItems.push({
-      index,
-      quiz: quizValidation.value,
-      questions: questionValidation.value,
-    });
-  });
-
-  const seenTitles = new Map();
-  const deduped = [];
-  validItems.forEach((item) => {
-    const key = item.quiz.title.toLowerCase();
-    if (seenTitles.has(key)) {
-      failed.push({
-        index: item.index,
-        title: item.quiz.title,
-        errors: [
-          `Duplicate title in payload (same as quizzes[${seenTitles.get(key)}]).`,
-        ],
-      });
-      return;
-    }
-
-    seenTitles.set(key, item.index);
-    deduped.push(item);
-  });
-
-  const existingDuplicateTitles = await findDuplicateQuizTitles(
-    deduped.map((item) => item.quiz.title),
-  );
-
-  const insertable = [];
-  deduped.forEach((item) => {
-    const key = item.quiz.title.toLowerCase();
-    if (existingDuplicateTitles.has(key)) {
-      failed.push({
-        index: item.index,
-        title: item.quiz.title,
-        errors: ["Quiz title already exists."],
-      });
-      return;
-    }
-
-    insertable.push(item);
-  });
-
-  let createdQuizzes = [];
-
-  if (insertable.length > 0) {
-    const quizDocs = insertable.map((item) => ({
-      ...item.quiz,
-      createdBy: req.user._id,
-    }));
-
-    createdQuizzes = await Quiz.insertMany(quizDocs, { ordered: true });
-
-    const questionDocs = [];
-    const countByQuizId = new Map();
-
-    createdQuizzes.forEach((quizDoc, index) => {
-      const source = insertable[index];
-      const cleanedQuestions = source.questions.map((question) => {
-        const { _id, quizId: ignoredQuizId, ...rest } = question;
-        return {
-          ...rest,
-          quizId: quizDoc._id,
-        };
-      });
-
-      countByQuizId.set(String(quizDoc._id), cleanedQuestions.length);
-      questionDocs.push(...cleanedQuestions);
-    });
-
-    if (questionDocs.length > 0) {
-      await Question.insertMany(questionDocs, { ordered: true });
-    }
-
-    if (createdQuizzes.length > 0) {
-      await Quiz.bulkWrite(
-        createdQuizzes.map((quizDoc) => ({
-          updateOne: {
-            filter: { _id: quizDoc._id },
-            update: {
-              $set: {
-                totalQuestions: countByQuizId.get(String(quizDoc._id)) || 0,
-              },
-            },
-          },
-        })),
-      );
-    }
-  }
-
-  const created = createdQuizzes.map((quizDoc, index) => ({
-    index: insertable[index].index,
-    _id: quizDoc._id,
-    title: quizDoc.title,
-    totalQuestions: insertable[index].questions.length,
-  }));
-
-  const successCount = created.length;
-  const failedCount = failed.length;
-  const total = items.length;
-
-  const statusCode = successCount > 0 ? 201 : 400;
-
-  return res.status(statusCode).json({
-    success: successCount > 0,
-    message:
-      successCount > 0
-        ? "Bulk quiz operation completed."
-        : "No quizzes were created.",
-    summary: {
-      total,
-      successCount,
-      failedCount,
-    },
-    created,
-    failed,
-  });
-});
-
 export const previewQuizPdfImport = asyncHandler(async (req, res) => {
   if (!req.file?.buffer) {
     return res.status(400).json({
@@ -477,6 +421,9 @@ export const previewQuizPdfImport = asyncHandler(async (req, res) => {
   const defaultDifficulty = QUIZ_DIFFICULTIES.includes(req.body?.defaultDifficulty)
     ? req.body.defaultDifficulty
     : "Easy";
+  let defaultCategory = QUIZ_CATEGORIES.includes(req.body?.defaultCategory)
+    ? req.body.defaultCategory
+    : "JavaScript";
 
   let targetQuiz = null;
   if (req.body?.quizId) {
@@ -489,11 +436,20 @@ export const previewQuizPdfImport = asyncHandler(async (req, res) => {
       res.status(404);
       throw new Error("Target quiz not found for PDF import.");
     }
+
+    if (!QUIZ_CATEGORIES.includes(req.body?.defaultCategory)) {
+      defaultCategory = targetQuiz.category || defaultCategory;
+    }
   }
 
   let extractedText = "";
+  let extractionWarnings = [];
   try {
-    extractedText = await extractTextFromPdfBuffer(req.file.buffer);
+    const extraction = await extractQuizTextWithOcrFallback(req.file.buffer);
+    extractedText = extraction.text;
+    extractionWarnings = Array.isArray(extraction.warnings)
+      ? extraction.warnings
+      : [];
   } catch (error) {
     return res.status(422).json({
       success: false,
@@ -503,14 +459,41 @@ export const previewQuizPdfImport = asyncHandler(async (req, res) => {
   }
   const parsed = parseQuizQuestionsFromText(extractedText, {
     defaultDifficulty,
+    defaultCategory,
   });
+  const parserWarnings = Array.isArray(parsed.parseWarnings)
+    ? parsed.parseWarnings
+    : Array.isArray(parsed.warnings)
+      ? parsed.warnings
+      : [];
+  const parseWarnings = [
+    ...new Set([...extractionWarnings, ...parserWarnings].filter(Boolean)),
+  ];
 
   if (parsed.questions.length === 0) {
+    const usedOcrFallback = parseWarnings.some(
+      (warning) => String(warning).trim() === OCR_FALLBACK_USED_WARNING,
+    );
+    const scannedWarning = parseWarnings.find((warning) =>
+      String(warning)
+        .toLowerCase()
+        .includes("image-based or scanned"),
+    );
+
     return res.status(422).json({
       success: false,
-      message: "No valid MCQ questions could be parsed from this PDF.",
+      message:
+        scannedWarning && !usedOcrFallback
+          ? UNREADABLE_SCANNED_PDF_MESSAGE
+          : scannedWarning ||
+        "No valid MCQ questions could be parsed from this PDF.",
       data: {
+        quiz: parsed.quizData,
+        quizData: parsed.quizData,
+        questions: [],
         ...parsed.meta,
+        parseWarnings,
+        warnings: parseWarnings,
         invalidItems: summarizeInvalidItems(parsed.invalidItems),
       },
     });
@@ -521,8 +504,12 @@ export const previewQuizPdfImport = asyncHandler(async (req, res) => {
     message: "PDF parsed successfully. Review preview before saving.",
     data: {
       targetQuiz,
+      quiz: parsed.quizData,
+      quizData: parsed.quizData,
       questions: parsed.questions,
       meta: parsed.meta,
+      parseWarnings,
+      warnings: parseWarnings,
       invalidItems: summarizeInvalidItems(parsed.invalidItems),
     },
   });
@@ -530,29 +517,103 @@ export const previewQuizPdfImport = asyncHandler(async (req, res) => {
 
 export const commitQuizPdfImport = asyncHandler(async (req, res) => {
   const parsedPayload = parseRequestPayload(req.body);
+  const targetQuizId = req.body?.quizId;
+  let targetQuiz = null;
+
+  if (targetQuizId) {
+    ensureValidObjectId(targetQuizId, "quiz id");
+    targetQuiz = await Quiz.findById(targetQuizId);
+    if (!targetQuiz) {
+      res.status(404);
+      throw new Error("Target quiz not found.");
+    }
+  }
+
+  const importMode = resolveImportModeFromRequest({
+    mode: req.body?.mode,
+    quizData: parsedPayload.quizData,
+    fallbackIsActive: targetQuiz?.isActive,
+  });
+  const shouldPublish = importMode === "publish";
 
   const questionValidation = validateQuestionsArray(parsedPayload.questions, {
     pathPrefix: "questions",
-    allowEmpty: false,
+    allowEmpty: !shouldPublish,
   });
 
   if (questionValidation.errors.length > 0) {
     return respondValidationError(res, questionValidation.errors);
   }
 
-  if (req.body?.quizId) {
-    ensureValidObjectId(req.body.quizId, "quiz id");
+  if (targetQuiz) {
+    const hasQuizDataUpdate = [
+      "title",
+      "description",
+      "category",
+      "difficulty",
+      "xpPotential",
+      "timeLimit",
+      "thumbnail",
+      "isActive",
+    ].some((field) => parsedPayload.quizData?.[field] !== undefined);
 
-    const targetQuiz = await Quiz.findById(req.body.quizId);
-    if (!targetQuiz) {
-      res.status(404);
-      throw new Error("Target quiz not found.");
+    if (hasQuizDataUpdate) {
+      const mergedInput = resolveMergedQuizInput(targetQuiz, parsedPayload.quizData);
+      const quizValidation = validateQuizInput(mergedInput, {
+        requireAllRequiredFields: true,
+        pathPrefix: "quiz",
+      });
+
+      if (quizValidation.errors.length > 0) {
+        return respondValidationError(res, quizValidation.errors);
+      }
+
+      const titleChanged =
+        String(targetQuiz.title).trim().toLowerCase() !==
+        quizValidation.value.title.toLowerCase();
+
+      if (titleChanged) {
+        const duplicateQuiz = await Quiz.findOne({
+          title: quizValidation.value.title,
+          _id: { $ne: targetQuiz._id },
+        })
+          .collation({ locale: "en", strength: 2 })
+          .select("_id title");
+
+        if (duplicateQuiz) {
+          return res.status(409).json({
+            success: false,
+            message: `Quiz title "${quizValidation.value.title}" already exists.`,
+          });
+        }
+      }
+
+      targetQuiz.set(quizValidation.value);
     }
 
-    const createdQuestions = await appendQuestionsToQuiz(
+    const deduped = await dedupeQuestionsAgainstQuiz(
       targetQuiz._id,
       questionValidation.value,
     );
+
+    const existingCount = await Question.countDocuments({ quizId: targetQuiz._id });
+    if (shouldPublish && existingCount + deduped.uniqueQuestions.length === 0) {
+      return respondValidationError(res, [
+        "At least one valid question is required to publish a quiz.",
+      ]);
+    }
+
+    targetQuiz.isActive = shouldPublish;
+    await targetQuiz.save();
+
+    let createdQuestions = [];
+    if (deduped.uniqueQuestions.length > 0) {
+      createdQuestions = await appendQuestionsToQuiz(
+        targetQuiz._id,
+        deduped.uniqueQuestions,
+      );
+    }
+
     const refreshed = await fetchQuizWithQuestions(targetQuiz._id);
 
     return res.status(201).json({
@@ -561,6 +622,8 @@ export const commitQuizPdfImport = asyncHandler(async (req, res) => {
       data: refreshed,
       summary: {
         insertedQuestions: createdQuestions.length,
+        skippedDuplicateQuestions: deduped.skippedDuplicateQuestions,
+        mode: importMode,
       },
     });
   }
@@ -574,6 +637,8 @@ export const commitQuizPdfImport = asyncHandler(async (req, res) => {
     return respondValidationError(res, quizValidation.errors);
   }
 
+  quizValidation.value.isActive = shouldPublish;
+
   const duplicateQuiz = await Quiz.findOne({ title: quizValidation.value.title })
     .collation({ locale: "en", strength: 2 })
     .select("_id title");
@@ -585,15 +650,25 @@ export const commitQuizPdfImport = asyncHandler(async (req, res) => {
     });
   }
 
+  const deduped = dedupeQuestionList(questionValidation.value);
+  if (shouldPublish && deduped.uniqueQuestions.length === 0) {
+    return respondValidationError(res, [
+      "At least one valid question is required to publish a quiz.",
+    ]);
+  }
+
   const createdQuiz = await Quiz.create({
     ...quizValidation.value,
     createdBy: req.user._id,
   });
 
-  const createdQuestions = await appendQuestionsToQuiz(
-    createdQuiz._id,
-    questionValidation.value,
-  );
+  let createdQuestions = [];
+  if (deduped.uniqueQuestions.length > 0) {
+    createdQuestions = await appendQuestionsToQuiz(
+      createdQuiz._id,
+      deduped.uniqueQuestions,
+    );
+  }
   const hydrated = await fetchQuizWithQuestions(createdQuiz._id);
 
   return res.status(201).json({
@@ -602,6 +677,8 @@ export const commitQuizPdfImport = asyncHandler(async (req, res) => {
     data: hydrated,
     summary: {
       insertedQuestions: createdQuestions.length,
+      skippedDuplicateQuestions: deduped.skippedDuplicateQuestions,
+      mode: importMode,
     },
   });
 });

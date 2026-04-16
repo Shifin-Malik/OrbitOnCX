@@ -5,14 +5,6 @@ import { FaBolt, FaTrophy, FaRobot, FaCode } from "react-icons/fa";
 function Features() {
   const features = [
     {
-      icon: IoPeopleOutline,
-      title: "Real-Time Collaboration",
-      desc: "Code together with live cursors, active user tracking, and instant sync across all participants.",
-      color: "text-blue-500",
-      darkColor: "dark:text-blue-400",
-      bg: "bg-blue-50/50 dark:bg-blue-500/10",
-    },
-    {
       icon: FaBolt,
       title: "Multi-Language Compiler",
       desc: "Execute code in 40+ languages with our Judge0-powered online compiler. Instant feedback.",

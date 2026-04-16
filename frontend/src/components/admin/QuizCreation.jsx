@@ -4,12 +4,10 @@ import {
   FaArrowLeft,
   FaSave,
   FaPlusCircle,
-  FaCode,
   FaListUl,
   FaFilePdf,
   FaMagic,
   FaSpinner,
-  FaInfoCircle,
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
@@ -49,21 +47,66 @@ const normalizeQuestion = (raw = {}) => {
   };
 };
 
+const isQuestionEmpty = (question) => {
+  const normalized = normalizeQuestion(question);
+  const hasText = normalized.q.trim().length > 0;
+  const hasOptions = normalized.options.some((option) => option.trim().length > 0);
+  const hasAnswer = normalized.correctAnswer.trim().length > 0;
+  const hasExplanation = normalized.explanation.trim().length > 0;
+
+  return !hasText && !hasOptions && !hasAnswer && !hasExplanation;
+};
+
+const sanitizeQuestionsForSave = (questions = []) =>
+  questions
+    .map((question) => normalizeQuestion(question))
+    .filter((question) => !isQuestionEmpty(question));
+
+const normalizeQuizPayload = (quizData, isActive) => ({
+  ...quizData,
+  title: String(quizData?.title || "").trim(),
+  description: String(quizData?.description || "").trim(),
+  category: quizData?.category || "JavaScript",
+  difficulty: quizData?.difficulty || "Easy",
+  xpPotential: Number(quizData?.xpPotential || 0),
+  timeLimit: Number(quizData?.timeLimit || 0),
+  thumbnail: String(quizData?.thumbnail || "").trim(),
+  isActive,
+});
+
+const getPreviewWarnings = (preview) => {
+  if (Array.isArray(preview?.parseWarnings)) {
+    return preview.parseWarnings;
+  }
+
+  if (Array.isArray(preview?.warnings)) {
+    return preview.warnings;
+  }
+
+  if (Array.isArray(preview?.meta?.parseWarnings)) {
+    return preview.meta.parseWarnings;
+  }
+
+  if (Array.isArray(preview?.meta?.warnings)) {
+    return preview.meta.warnings;
+  }
+
+  return [];
+};
+
 const QuizCreation = ({
   onBack,
   onSave,
   editData,
   isSubmitting = false,
   isEditLoading = false,
-  onBulkCreate,
   onPreviewPdf,
   onCommitPdfImport,
   pdfPreview,
   onClearPdfPreview,
 }) => {
-  const [importMode, setImportMode] = useState("manual"); // manual | bulk | ai
+  const [importMode, setImportMode] = useState("manual"); // manual | ai
   const [isProcessing, setIsProcessing] = useState(false);
-  const [bulkText, setBulkText] = useState("");
 
   // Aligned perfectly with Quiz Mongoose Schema
   const [quizData, setQuizData] = useState({
@@ -117,6 +160,32 @@ const QuizCreation = ({
     setQuestions([createEmptyQuestion()]);
   }, [editData]);
 
+  useEffect(() => {
+    if (!pdfPreview?.questions?.length) return;
+
+    setQuestions(pdfPreview.questions.map((question) => normalizeQuestion(question)));
+
+    if (!isEditMode && pdfPreview?.quizData) {
+      setQuizData((prev) => ({
+        ...prev,
+        title: prev.title || pdfPreview.quizData.title || "",
+        description: prev.description || pdfPreview.quizData.description || "",
+        category: pdfPreview.quizData.category || prev.category,
+        difficulty: pdfPreview.quizData.difficulty || prev.difficulty,
+        xpPotential:
+          Number.isInteger(pdfPreview.quizData.xpPotential) &&
+          pdfPreview.quizData.xpPotential >= 0
+            ? pdfPreview.quizData.xpPotential
+            : prev.xpPotential,
+        timeLimit:
+          Number.isInteger(pdfPreview.quizData.timeLimit) &&
+          pdfPreview.quizData.timeLimit > 0
+            ? pdfPreview.quizData.timeLimit
+            : prev.timeLimit,
+      }));
+    }
+  }, [pdfPreview, isEditMode]);
+
   // --- PDF/AI GENERATION LOGIC ---
   const handlePDFUpload = async (e) => {
     const file = e.target.files[0];
@@ -130,10 +199,17 @@ const QuizCreation = ({
     setIsProcessing(true);
 
     try {
-      await onPreviewPdf({
+      const preview = await onPreviewPdf({
         file,
         defaultDifficulty: quizData.difficulty,
+        defaultCategory: quizData.category,
       });
+
+      const warningCount = getPreviewWarnings(preview).length;
+
+      if (warningCount > 0) {
+        toast(`Parsed with ${warningCount} warning(s). Review before saving.`);
+      }
     } catch (error) {
       toast.error(
         error?.message ||
@@ -146,77 +222,21 @@ const QuizCreation = ({
     }
   };
 
-  // --- BULK PARSER LOGIC ---
-  const handleBulkImport = async () => {
-    try {
-      const parsed = JSON.parse(bulkText);
-      if (!Array.isArray(parsed) || parsed.length === 0) {
-        toast.error("JSON must be a non-empty array.");
-        return;
-      }
-
-      const first = parsed[0] || {};
-      const looksLikeQuestionArray =
-        typeof first === "object" &&
-        !Array.isArray(first) &&
-        (Object.prototype.hasOwnProperty.call(first, "q") ||
-          Object.prototype.hasOwnProperty.call(first, "question")) &&
-        Object.prototype.hasOwnProperty.call(first, "options");
-
-      if (looksLikeQuestionArray) {
-        setQuestions(parsed.map((item) => normalizeQuestion(item)));
-        setImportMode("manual");
-        setBulkText("");
-        toast.success("Questions loaded into manual editor.");
-        return;
-      }
-
-      if (!onBulkCreate) {
-        toast.error("Bulk quiz creation is not available right now.");
-        return;
-      }
-
-      setIsProcessing(true);
-
-      const normalizedBulkPayload = parsed.map((item) => {
-        const quizData = item?.quizData ? item.quizData : item;
-        const itemQuestions = Array.isArray(item?.questions)
-          ? item.questions
-          : Array.isArray(item?.quizData?.questions)
-            ? item.quizData.questions
-            : [];
-
-        return {
-          quizData,
-          questions: itemQuestions,
-        };
-      });
-
-      await onBulkCreate(normalizedBulkPayload);
-      setBulkText("");
-    } catch {
-      toast.error("Invalid JSON format. Please check the structure.");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleSaveClick = async () => {
+  const handleSaveClick = async (mode = quizData.isActive ? "publish" : "draft") => {
     if (!onSave) return;
 
-    if (importMode === "bulk") {
-      await handleBulkImport();
-      return;
-    }
+    const shouldPublish = mode === "publish";
+    const normalizedQuiz = normalizeQuizPayload(quizData, shouldPublish);
+    const preparedQuestions = sanitizeQuestionsForSave(questions);
 
-    if (!quizData.title.trim()) {
+    if (!normalizedQuiz.title) {
       toast.error("Quiz title is required.");
       return;
     }
 
     await onSave({
-      quizData,
-      questions,
+      quizData: normalizedQuiz,
+      questions: preparedQuestions,
     });
   };
 
@@ -233,7 +253,9 @@ const QuizCreation = ({
     toast.success("Parsed questions loaded into editor.");
   };
 
-  const handleCommitPdfSave = async () => {
+  const handleCommitPdfSave = async (
+    mode = quizData.isActive ? "publish" : "draft",
+  ) => {
     if (!onCommitPdfImport) {
       toast.error("PDF save flow is not connected yet.");
       return;
@@ -247,11 +269,14 @@ const QuizCreation = ({
     setIsProcessing(true);
 
     try {
+      const shouldPublish = mode === "publish";
+      const normalizedQuiz = normalizeQuizPayload(quizData, shouldPublish);
+      const preparedQuestions = sanitizeQuestionsForSave(questions);
+
       await onCommitPdfImport({
-        quizData,
-        questions: pdfPreview.questions.map((question) =>
-          normalizeQuestion(question),
-        ),
+        quizData: normalizedQuiz,
+        questions: preparedQuestions,
+        mode,
       });
     } catch (error) {
       toast.error(
@@ -262,6 +287,16 @@ const QuizCreation = ({
     } finally {
       setIsProcessing(false);
     }
+  };
+
+  const handlePrimarySave = async () => {
+    const mode = quizData.isActive ? "publish" : "draft";
+    if (importMode === "ai" && pdfPreview?.questions?.length) {
+      await handleCommitPdfSave(mode);
+      return;
+    }
+
+    await handleSaveClick(mode);
   };
 
   // --- QUESTION HANDLERS ---
@@ -320,7 +355,6 @@ const QuizCreation = ({
         <div className="flex bg-[var(--color-background-elevated)] p-1 rounded-xl border border-[var(--border-color-primary)]">
           {[
             { id: "manual", icon: <FaListUl />, label: "Manual" },
-            { id: "bulk", icon: <FaCode />, label: "Bulk JSON" },
             { id: "ai", icon: <FaMagic />, label: "PDF / AI" },
           ].map((mode) => (
             <button
@@ -338,11 +372,7 @@ const QuizCreation = ({
         </div>
 
         <button
-          onClick={
-            importMode === "ai" && pdfPreview?.questions?.length
-              ? handleCommitPdfSave
-              : handleSaveClick
-          }
+          onClick={handlePrimarySave}
           disabled={isBusy}
           className="bg-[var(--color-primary)] text-white px-6 py-2.5 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--color-primary-dark)] shadow-lg shadow-[var(--color-success-glow)] transition-all active:scale-95 flex items-center"
         >
@@ -351,13 +381,11 @@ const QuizCreation = ({
           ) : (
             <FaSave className="mr-2" />
           )}
-          {importMode === "bulk"
-            ? "Process Bulk"
-            : importMode === "ai" && pdfPreview?.questions?.length
-              ? "Confirm PDF Save"
-              : isEditMode
-                ? "Update Blueprint"
-                : "Save Blueprint"}
+          {isEditMode
+            ? "Update Blueprint"
+            : quizData.isActive
+              ? "Publish Quiz"
+              : "Save Draft"}
         </button>
       </div>
 
@@ -539,7 +567,7 @@ const QuizCreation = ({
                   </div>
 
                   <div className="space-y-2 max-h-[38vh] overflow-y-auto pr-1 custom-scrollbar">
-                    {pdfPreview.questions.slice(0, 6).map((item, idx) => (
+                    {questions.slice(0, 6).map((item, idx) => (
                       <div
                         key={idx}
                         className="bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] rounded-xl p-3"
@@ -557,19 +585,43 @@ const QuizCreation = ({
                     ))}
                   </div>
 
+                  {getPreviewWarnings(pdfPreview).length > 0 ? (
+                    <div className="bg-amber-500/10 border border-amber-500/25 rounded-xl p-3 text-[10px] text-amber-600 space-y-1">
+                      {getPreviewWarnings(pdfPreview).slice(0, 3).map((warning, index) => (
+                        <p key={`${warning}-${index}`}>{warning}</p>
+                      ))}
+                    </div>
+                  ) : null}
+
+                  {Array.isArray(pdfPreview.invalidItems) &&
+                  pdfPreview.invalidItems.length > 0 ? (
+                    <div className="bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] rounded-xl p-3">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-[var(--text-color-muted)]">
+                        Rejected Blocks: {pdfPreview.invalidItems.length}
+                      </p>
+                    </div>
+                  ) : null}
+
                   <div className="flex flex-wrap gap-2 pt-1">
                     <button
                       onClick={handleApplyPreviewToEditor}
                       className="bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] text-[var(--text-color-primary)] px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest hover:border-[var(--color-primary)] transition-all"
                     >
-                      Load Into Editor
+                      Edit Parsed Questions
                     </button>
                     <button
-                      onClick={handleCommitPdfSave}
+                      onClick={() => handleCommitPdfSave("draft")}
+                      disabled={isBusy}
+                      className="bg-amber-500 text-white px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest hover:brightness-110 transition-all disabled:opacity-60"
+                    >
+                      Save As Draft
+                    </button>
+                    <button
+                      onClick={() => handleCommitPdfSave("publish")}
                       disabled={isBusy}
                       className="bg-[var(--color-primary)] text-white px-4 py-2 rounded-lg text-[9px] font-black uppercase tracking-widest hover:bg-[var(--color-primary-dark)] transition-all disabled:opacity-60"
                     >
-                      Save Parsed Data
+                      Publish
                     </button>
                     {onClearPdfPreview ? (
                       <button
@@ -611,29 +663,6 @@ const QuizCreation = ({
                 </>
               )}
             </div>
-          ) : /* BULK MODE */
-          importMode === "bulk" ? (
-            <div className="bg-[var(--color-background-soft)] p-6 rounded-[1.5rem] border border-[var(--border-color-primary)] space-y-4">
-              <div className="flex items-center gap-2 text-[var(--color-primary)]">
-                <FaInfoCircle size={12} />
-                <p className="text-[9px] font-black uppercase tracking-widest">
-                  JSON Bulk Import
-                </p>
-              </div>
-              <textarea
-                className="w-full h-[50vh] bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] rounded-xl p-4 text-[10px] font-mono outline-none focus:ring-1 ring-[var(--color-primary)] custom-scrollbar"
-                placeholder='[{ "title": "JavaScript Basics", "category": "JavaScript", "difficulty": "Easy", "timeLimit": 600, "xpPotential": 1000, "isActive": true, "questions": [{ "q": "What is closure?", "options": ["A","B","C","D"], "correctAnswer": "A", "difficulty": "Easy" }] }]'
-                value={bulkText}
-                onChange={(e) => setBulkText(e.target.value)}
-              />
-              <button
-                onClick={handleBulkImport}
-                disabled={isBusy}
-                className="w-full bg-[var(--color-primary)] text-white py-3 rounded-xl font-black text-[10px] uppercase tracking-widest hover:bg-[var(--color-primary-dark)] transition-all"
-              >
-                {isBusy ? "Processing..." : "Process JSON Structure"}
-              </button>
-            </div>
           ) : (
             /* MANUAL MODE */
             <div className="space-y-4">
@@ -657,7 +686,7 @@ const QuizCreation = ({
                   >
                     <button
                       onClick={() => removeQuestion(qIdx)}
-                      disabled={questions.length <= 1}
+                      disabled={isBusy}
                       className="absolute top-5 right-5 text-red-400 opacity-0 group-hover/q:opacity-100 transition-opacity hover:text-red-600"
                     >
                       <FaTrash size={12} />
@@ -769,6 +798,13 @@ const QuizCreation = ({
                     </div>
                   </div>
                 ))}
+                {questions.length === 0 ? (
+                  <div className="bg-[var(--color-background-soft)] p-6 rounded-[1.5rem] border border-[var(--border-color-primary)] text-center">
+                    <p className="text-[10px] font-black uppercase tracking-widest text-[var(--text-color-muted)]">
+                      No questions yet. Add one manually or parse a PDF.
+                    </p>
+                  </div>
+                ) : null}
               </div>
             </div>
           )}

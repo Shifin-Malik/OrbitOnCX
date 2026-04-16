@@ -15,6 +15,14 @@ export const createProblemFromJsonAPI = (payload) =>
 export const bulkCreateProblemsFromJsonAPI = (payload) =>
   API.post("/admin/problems/json/bulk", payload);
 
+export const previewProblemPdfImportAPI = (formData) =>
+  API.post("/admin/problems/import/pdf/preview", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+
+export const saveProblemPdfImportAPI = (payload) =>
+  API.post("/admin/problems/import/pdf/save", payload);
+
 export const updateProblemFromJsonAPI = (problemId, payload) =>
   API.put(`/admin/problems/${problemId}/json`, payload);
 

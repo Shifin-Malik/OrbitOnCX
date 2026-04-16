@@ -28,13 +28,12 @@ const ProblemListPage = () => {
     (s) => s.problems,
   );
 
-  
+  const { user } = useSelector((state) => state.auth);
+  console.log(user.stats.totalSolved);
 
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState("");
   const [status, setStatus] = useState("");
-  const [tags, setTags] = useState("");
-  const [sort, setSort] = useState("newest");
   const [pageNum, setPageNum] = useState(1);
 
   const params = useMemo(
@@ -42,13 +41,13 @@ const ProblemListPage = () => {
       search: query || undefined,
       difficulty: difficulty || undefined,
       status: status || undefined,
-      tags: tags || undefined,
-      sort,
       page: pageNum,
       limit: 20,
     }),
-    [query, difficulty, status, tags, sort, pageNum],
+    [query, difficulty, status, pageNum],
   );
+
+  console.log(user);
 
   useEffect(() => {
     const t = setTimeout(() => {
@@ -60,13 +59,21 @@ const ProblemListPage = () => {
   return (
     <div className="min-h-screen bg-[var(--color-background)] text-[var(--text-color-primary)] pt-24 pb-16 px-4 md:px-10">
       <div className="max-w-6xl mx-auto space-y-6">
-        <div className="flex flex-col gap-2">
+        <div className="flex justify-between items-center ">
           <h1 className="text-3xl font-black tracking-tighter uppercase">
             Problems
           </h1>
-          <p className="text-[11px] font-bold uppercase tracking-widest text-[var(--text-color-muted)]">
-            Solve • Submit • Track streak
-          </p>
+          <div className="flex gap-4 text-sm font-semibold">
+            <span className="text-green-500 font-bold">
+              Easy: {user?.stats?.totalSolved || 0}
+            </span>
+            <span className="text-yellow-500 font-bold">
+              Medium: {user?.stats?.mediumSolved || 0}
+            </span>
+            <span className="text-red-500 font-bold">
+              Advanced: {user?.stats?.hardSolved || 0}
+            </span>
+          </div>
         </div>
 
         <div className="bg-[var(--color-background-soft)] border border-[var(--border-color-primary)] rounded-3xl p-4 md:p-5 flex flex-col gap-3">
@@ -115,32 +122,6 @@ const ProblemListPage = () => {
                 </select>
                 <FaChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] opacity-40 pointer-events-none" />
               </div>
-            </div>
-          </div>
-
-          <div className="flex flex-col md:flex-row gap-3">
-            <input
-              value={tags}
-              onChange={(e) => {
-                setTags(e.target.value);
-                setPageNum(1);
-              }}
-              placeholder="Tags (comma separated)…"
-              className="flex-1 px-4 py-3 rounded-2xl bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] outline-none text-sm"
-            />
-
-            <div className="relative md:w-60">
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value)}
-                className="w-full appearance-none px-4 py-3 rounded-2xl bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] text-sm font-bold"
-              >
-                <option value="newest">Newest</option>
-                <option value="title">Title</option>
-                <option value="difficulty">Difficulty</option>
-                <option value="most-solved">Most Solved</option>
-              </select>
-              <FaChevronDown className="absolute right-4 top-1/2 -translate-y-1/2 text-[10px] opacity-40 pointer-events-none" />
             </div>
           </div>
         </div>
@@ -237,4 +218,3 @@ const ProblemListPage = () => {
 };
 
 export default ProblemListPage;
-
