@@ -42,7 +42,7 @@ API.interceptors.response.use(
 
       try {
         await axios.post(
-          "http://localhost:5000/api/users/refresh-token",
+          `${import.meta.env.VITE_BACKEND_URL}/api/users/refresh-token`,
           {},
           { withCredentials: true },
         );
