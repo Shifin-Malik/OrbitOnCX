@@ -24,6 +24,5 @@ export const fetchUserHistory = (params) =>
 export const fetchLeaderboard = (quizId) =>
   API.get("/users/quizzes/leaderboard", { params: quizId ? { quizId } : {} });
 
-// 5. Update only Quiz Difficulty level
-export const updateQuizDifficulty = (id, difficulty) => 
-  API.put(`/users/update/${id}`, { difficulty });
+
+

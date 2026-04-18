@@ -94,17 +94,7 @@ export const fetchLeaderboard = createAsyncThunk(
 );
 
 // Existing admin/config use-case
-export const updateDifficulty = createAsyncThunk(
-  "quiz/updateDifficulty",
-  async ({ id, difficulty }, { rejectWithValue }) => {
-    try {
-      const response = await quizApi.updateQuizDifficulty(id, difficulty);
-      return response.data;
-    } catch (error) {
-      return handleReject(error, rejectWithValue);
-    }
-  },
-);
+
 
 const initialState = {
   quizzes: [],
@@ -235,31 +225,6 @@ const quizSlice = createSlice({
         state.error = action.payload;
       })
 
-      .addCase(updateDifficulty.pending, (state) => {
-        state.updateLoading = true;
-        state.error = null;
-      })
-      .addCase(updateDifficulty.fulfilled, (state, action) => {
-        state.updateLoading = false;
-        const updatedQuiz = action.payload.data || action.payload;
-
-        state.quizzes = state.quizzes.map((quiz) =>
-          quiz._id === updatedQuiz._id
-            ? { ...quiz, difficulty: updatedQuiz.difficulty }
-            : quiz,
-        );
-
-        if (state.quizDetails && state.quizDetails._id === updatedQuiz._id) {
-          state.quizDetails = {
-            ...state.quizDetails,
-            difficulty: updatedQuiz.difficulty,
-          };
-        }
-      })
-      .addCase(updateDifficulty.rejected, (state, action) => {
-        state.updateLoading = false;
-        state.error = action.payload;
-      });
   },
 });
 

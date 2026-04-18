@@ -14,9 +14,13 @@ const formatDateTime = (isoString) => {
 
 const QuizHistory = () => {
   const dispatch = useDispatch();
-  const { history = [], loadingHistory, error } = useSelector(
-    (state) => state.quiz,
-  );
+  const {
+    history = [],
+    loadingHistory,
+    error,
+  } = useSelector((state) => state.quiz);
+
+  console.log(history);
 
   useEffect(() => {
     dispatch(fetchUserHistory());
@@ -24,7 +28,8 @@ const QuizHistory = () => {
 
   const rows = useMemo(() => {
     return history.slice(0, 3).map((attempt, idx) => {
-      const quiz = attempt.quizId || {};
+      const quiz = attempt.quiz || {}; 
+
       return {
         id: attempt._id,
         attemptNo: idx + 1,
@@ -145,4 +150,3 @@ const QuizHistory = () => {
 };
 
 export default QuizHistory;
-

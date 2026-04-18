@@ -12,7 +12,7 @@ const processQueue = (error, token = null) => {
 };
 
 const API = axios.create({
-  baseURL: "http://localhost:5000/api",
+  baseURL: `${import.meta.env.VITE_BACKEND_URL}/api`,
   withCredentials: true,
 });
 

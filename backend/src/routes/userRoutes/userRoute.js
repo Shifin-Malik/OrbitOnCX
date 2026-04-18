@@ -32,11 +32,9 @@ import {
   getLeaderboard,
   startQuiz,
   submitQuiz,
-  updateQuiz
 } from "../../controllers/userController/quizController.js";
 
 // Stats & Leaderboard Controllers Import
-
 
 import { protect } from "../../middlewares/authMiddleware.js";
 import uploadAvatar from "../../middlewares/uploadAvatar.js";
@@ -83,14 +81,13 @@ router.delete("/search-history", protect, clearSearchHistory);
 router.put("/follow/:id", protect, toggleFollow);
 
 // --- Quiz System Routes ---
-router.get("/quizzes", protect, getQuizzes);   
+router.get("/quizzes", protect, getQuizzes);
 router.get("/quizzes/history", protect, getUserHistory);
 router.get("/quizzes/leaderboard", protect, getLeaderboard);
 router.get("/quizzes/leaderboard/:quizId", protect, getLeaderboard);
 router.get("/quizzes/:id", protect, getQuizDetails);
-router.get("/quizzes/start/:id", protect, startQuiz); 
-router.post("/quizzes/submit", protect, submitQuiz);  
-router.put("/update/:id", protect, updateQuiz);
+router.get("/quizzes/start/:id", protect, startQuiz);
+router.post("/quizzes/submit", protect, submitQuiz);
 
 // --- Compiler Routes ---
 router.post("/execute", executeCode);

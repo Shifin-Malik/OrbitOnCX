@@ -71,6 +71,7 @@ const quizSchema = new mongoose.Schema(
   },
 );
 
+quizSchema.index({ isActive: 1, createdAt: -1 });
 quizSchema.index({ category: 1, difficulty: 1, isActive: 1 });
 
 export default mongoose.model("Quiz", quizSchema);
