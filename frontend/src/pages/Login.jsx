@@ -25,6 +25,7 @@ import {
   forgotPassword,
   resetPassword,
   resetAuthState,
+  getProfile
 } from "../features/auth/authSlice";
 import { useNavigate } from "react-router-dom";
 
@@ -37,9 +38,22 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
   );
 
   const googleLoginHandler = useGoogleLogin({
-    onSuccess: (tokenResponse) => {
-      dispatch(googleLoginAction(tokenResponse.access_token));
-    },
+    onSuccess: async (tokenResponse) => {
+  try {
+    await dispatch(
+      googleLoginAction(tokenResponse.access_token)
+    ).unwrap();
+    await dispatch(getProfile()).unwrap();
+
+    dispatch(resetCompilerState());
+    dispatch(resetAuthState());
+    onClose();
+
+    navigate("/");
+  } catch (error) {
+    toast.error("Google Login Failed");
+  }
+},
     onError: () => toast.error("Google Login Failed"),
   });
 
