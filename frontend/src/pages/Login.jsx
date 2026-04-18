@@ -16,7 +16,6 @@ import {
 import { motion, AnimatePresence } from "framer-motion";
 import { useGoogleLogin } from "@react-oauth/google";
 import { googleLoginAction } from "../features/auth/authSlice";
-
 import { resetCompilerState } from "../features/compiler/compilerSlice";
 import {
   register,
