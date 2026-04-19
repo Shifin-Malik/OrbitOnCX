@@ -1,8 +1,10 @@
 import dotenv from "dotenv";
-dotenv.config();
 import Groq from "groq-sdk";
 
-const DEFAULT_GROQ_MODEL = process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
+dotenv.config();
+
+const DEFAULT_GROQ_MODEL =
+  process.env.GROQ_MODEL || "llama-3.3-70b-versatile";
 
 console.log("GROQ MODEL:", DEFAULT_GROQ_MODEL);
 console.log("GROQ KEY EXISTS:", !!process.env.GROQ_API_KEY);
@@ -42,7 +44,7 @@ const getGroqClient = () => {
   const apiKey = process.env.GROQ_API_KEY;
 
   if (!apiKey) {
-    throw new Error("GROQ_API_KEY is not configured in .env");
+    throw new Error("GROQ_API_KEY is not configured");
   }
 
   if (!groqClient) {
@@ -69,9 +71,13 @@ const buildInput = ({
     message,
   ];
 
-  if (problemTitle) contextParts.push("", "Problem title:", problemTitle);
-  if (problemDescription)
+  if (problemTitle) {
+    contextParts.push("", "Problem title:", problemTitle);
+  }
+
+  if (problemDescription) {
     contextParts.push("", "Problem description:", problemDescription);
+  }
 
   if (code) {
     contextParts.push(
@@ -121,8 +127,6 @@ export const getMentorReply = async (payload = {}) => {
     const client = getGroqClient();
     const userInput = buildInput(sanitized);
 
-    console.log("Sending request to Groq...");
-
     const response = await client.chat.completions.create({
       model: DEFAULT_GROQ_MODEL,
       messages: [
@@ -150,19 +154,15 @@ export const getMentorReply = async (payload = {}) => {
       temperature: 0.5,
     });
 
-    const reply = response.choices[0]?.message?.content?.trim();
+    const reply = response?.choices?.[0]?.message?.content?.trim();
 
     if (!reply) {
       throw new Error("Empty response from Groq");
     }
 
-    console.log("Successfully received AI response!");
     return reply;
   } catch (error) {
-    console.error("\n=============================================");
-    console.error("GROQ API ACTUAL ERROR DETAILS:");
-    console.error(error?.message || error);
-    console.error("=============================================\n");
+    console.error("GROQ API ERROR:", error?.message || error);
     throw error;
   }
 };

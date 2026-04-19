@@ -10,7 +10,7 @@ import {
   socketNewComment,
   socketNewReply,
 } from "../../features/discussions/discussionSlice.js";
-import { createDiscussionSocket } from "../../services/socket.js";
+import { socket } from "../../services/socket.js";
 import { FaPaperPlane, FaTrash } from "react-icons/fa";
 
 const DiscussionPanel = ({ problemId }) => {
@@ -26,36 +26,49 @@ const DiscussionPanel = ({ problemId }) => {
 
   useEffect(() => {
     if (!problemId) return;
+
     dispatch(fetchDiscussions(problemId));
 
-    socketRef.current = createDiscussionSocket();
-    socketRef.current.on("discussion:new-comment", (payload) =>
-      dispatch(socketNewComment(payload)),
-    );
-    socketRef.current.on("discussion:new-reply", (payload) =>
-      dispatch(socketNewReply(payload)),
-    );
-    socketRef.current.on("discussion:deleted", (payload) =>
-      dispatch(socketDeleted(payload)),
-    );
+    socketRef.current = socket;
+
+    if (!socketRef.current.connected) {
+      socketRef.current.connect();
+    }
+
+    const handleNewComment = (payload) => {
+      dispatch(socketNewComment(payload));
+    };
+
+    const handleNewReply = (payload) => {
+      dispatch(socketNewReply(payload));
+    };
+
+    const handleDeleted = (payload) => {
+      dispatch(socketDeleted(payload));
+    };
+
+    socketRef.current.on("discussion:new-comment", handleNewComment);
+    socketRef.current.on("discussion:new-reply", handleNewReply);
+    socketRef.current.on("discussion:deleted", handleDeleted);
 
     socketRef.current.emit("discussion:join", { problemId });
 
     return () => {
-      try {
-        socketRef.current?.emit("discussion:leave", { problemId });
-        socketRef.current?.disconnect();
-      } finally {
-        socketRef.current = null;
-      }
+      socketRef.current?.emit("discussion:leave", { problemId });
+      socketRef.current?.off("discussion:new-comment", handleNewComment);
+      socketRef.current?.off("discussion:new-reply", handleNewReply);
+      socketRef.current?.off("discussion:deleted", handleDeleted);
     };
   }, [dispatch, problemId]);
 
   const onPost = async () => {
     if (!problemId) return;
     if (!commentText.trim()) return;
+
     try {
-      await dispatch(postComment({ problemId, content: commentText })).unwrap();
+      await dispatch(
+        postComment({ problemId, content: commentText })
+      ).unwrap();
       setCommentText("");
     } catch (e) {
       toast.error(e || "Failed to post");
@@ -65,10 +78,16 @@ const DiscussionPanel = ({ problemId }) => {
   const onReply = async () => {
     if (!problemId || !replyTo) return;
     if (!replyText.trim()) return;
+
     try {
       await dispatch(
-        replyComment({ problemId, commentId: replyTo, content: replyText }),
+        replyComment({
+          problemId,
+          commentId: replyTo,
+          content: replyText,
+        })
       ).unwrap();
+
       setReplyText("");
       setReplyTo(null);
     } catch (e) {
@@ -98,6 +117,7 @@ const DiscussionPanel = ({ problemId }) => {
           placeholder="Add to the discussion…"
           className="flex-1 min-h-12 max-h-40 px-4 py-3 rounded-2xl bg-[var(--color-background-elevated)] border border-[var(--border-color-primary)] outline-none text-sm resize-y"
         />
+
         <button
           onClick={onPost}
           className="px-4 py-3 rounded-2xl bg-[var(--color-primary)] text-white font-black text-[10px] uppercase tracking-widest"
@@ -138,6 +158,7 @@ const DiscussionPanel = ({ problemId }) => {
                     </div>
                   </div>
                 </div>
+
                 {canDelete(c.user?._id) ? (
                   <button
                     onClick={() => onDelete(c._id)}
@@ -148,6 +169,7 @@ const DiscussionPanel = ({ problemId }) => {
                   </button>
                 ) : null}
               </div>
+
               <div className="mt-3 text-[12px] text-[var(--text-color-secondary)] whitespace-pre-wrap">
                 {c.content}
               </div>
@@ -169,12 +191,14 @@ const DiscussionPanel = ({ problemId }) => {
                     placeholder="Write a reply…"
                     className="flex-1 px-4 py-3 rounded-2xl bg-[var(--color-background-soft)] border border-[var(--border-color-primary)] outline-none text-sm"
                   />
+
                   <button
                     onClick={onReply}
                     className="px-4 py-3 rounded-2xl bg-[var(--color-primary)] text-white font-black text-[10px] uppercase tracking-widest"
                   >
                     Send
                   </button>
+
                   <button
                     onClick={() => {
                       setReplyTo(null);
@@ -208,6 +232,7 @@ const DiscussionPanel = ({ problemId }) => {
                             {new Date(r.createdAt).toLocaleString()}
                           </div>
                         </div>
+
                         {canDelete(r.user?._id) ? (
                           <button
                             onClick={() => onDelete(r._id)}
@@ -218,6 +243,7 @@ const DiscussionPanel = ({ problemId }) => {
                           </button>
                         ) : null}
                       </div>
+
                       <div className="mt-2 text-[12px] text-[var(--text-color-secondary)] whitespace-pre-wrap">
                         {r.content}
                       </div>
@@ -234,4 +260,3 @@ const DiscussionPanel = ({ problemId }) => {
 };
 
 export default React.memo(DiscussionPanel);
-

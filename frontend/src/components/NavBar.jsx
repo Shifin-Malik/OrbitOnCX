@@ -2,12 +2,16 @@ import React, { useState, useEffect, memo, useCallback, useRef } from "react";
 import { HiOutlineMenu, HiX } from "react-icons/hi";
 import { NavLink, useNavigate } from "react-router-dom";
 import { IoIosHome } from "react-icons/io";
-import { FaCode, FaMoon, FaSun } from "react-icons/fa";
+import {
+  FaCode,
+  FaMoon,
+  FaSun,
+  FaSearch,
+  FaQuestionCircle,
+} from "react-icons/fa";
 import { SiLeetcode } from "react-icons/si";
-import { FaQuestionCircle } from "react-icons/fa";
 import { useSelector } from "react-redux";
 import Login from "../pages/Login.jsx";
-import { FaSearch } from "react-icons/fa";
 import ProfileDropdown from "./ProfileDropdown.jsx";
 
 const NavBar = () => {
@@ -17,11 +21,12 @@ const NavBar = () => {
   const [scrolled, setScrolled] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+
   const dropdownRef = useRef(null);
+  const mobileMenuRef = useRef(null);
   const navigate = useNavigate();
 
   const user = useSelector((state) => state.auth.user);
-
   const isAuthLoading = useSelector((state) => state.auth.loading);
 
   const defaultAvatar =
@@ -33,7 +38,16 @@ const NavBar = () => {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
         setDropdownOpen(false);
       }
+
+      if (
+        mobileMenuRef.current &&
+        !mobileMenuRef.current.contains(event.target) &&
+        !event.target.closest("[data-mobile-menu-button]")
+      ) {
+        setMenuOpen(false);
+      }
     };
+
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
@@ -46,10 +60,9 @@ const NavBar = () => {
 
   useEffect(() => {
     const savedTheme = localStorage.getItem("theme") || "dark";
-    if (savedTheme === "dark") {
-      document.documentElement.classList.add("dark");
-      setDarkMode(true);
-    }
+    const isDark = savedTheme === "dark";
+    document.documentElement.classList.toggle("dark", isDark);
+    setDarkMode(isDark);
   }, []);
 
   useEffect(() => {
@@ -57,10 +70,10 @@ const NavBar = () => {
   }, [user?.avatar]);
 
   const toggleTheme = useCallback(() => {
-    const newTheme = !darkMode ? "dark" : "light";
-    document.documentElement.classList.toggle("dark");
-    localStorage.setItem("theme", newTheme);
-    setDarkMode((prev) => !prev);
+    const nextDarkMode = !darkMode;
+    document.documentElement.classList.toggle("dark", nextDarkMode);
+    localStorage.setItem("theme", nextDarkMode ? "dark" : "light");
+    setDarkMode(nextDarkMode);
   }, [darkMode]);
 
   const allLinks = [
@@ -86,6 +99,27 @@ const NavBar = () => {
     } else {
       setModalMode("signin");
       setModalOpen(true);
+    }
+  };
+
+  const openSigninModal = () => {
+    setModalMode("signin");
+    setModalOpen(true);
+    setMenuOpen(false);
+  };
+
+  const openSignupModal = () => {
+    setModalMode("signup");
+    setModalOpen(true);
+    setMenuOpen(false);
+  };
+
+  const handleMobileProfile = () => {
+    setMenuOpen(false);
+    if (user) {
+      navigate("/profile");
+    } else {
+      openSigninModal();
     }
   };
 
@@ -123,6 +157,7 @@ const NavBar = () => {
           <button
             onClick={toggleTheme}
             className="p-2 rounded-xl bg-secondary text-primary hover:scale-105 transition"
+            title="Toggle Theme"
           >
             {darkMode ? <FaSun size={14} /> : <FaMoon size={14} />}
           </button>
@@ -132,19 +167,13 @@ const NavBar = () => {
           ) : !user ? (
             <div className="flex items-center gap-2">
               <button
-                onClick={() => {
-                  setModalMode("signin");
-                  setModalOpen(true);
-                }}
+                onClick={openSigninModal}
                 className="px-5 py-2.5 text-[11px] font-black uppercase tracking-widest text-secondary hover:text-primary transition-colors"
               >
                 Sign In
               </button>
               <button
-                onClick={() => {
-                  setModalMode("signup");
-                  setModalOpen(true);
-                }}
+                onClick={openSignupModal}
                 className="px-6 py-3 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest hover:opacity-90 transition-all"
               >
                 Get Started
@@ -152,17 +181,20 @@ const NavBar = () => {
             </div>
           ) : (
             <div
-              className="flex items-center gap-4 pl-4 border-l border-secondary cursor-pointer group"
-              onClick={handleProfileClick}
+              ref={dropdownRef}
+              className="relative flex items-center gap-4 pl-4 border-l border-secondary cursor-pointer group"
             >
-              <div className="relative p-0.5 rounded-xl bg-linear-to-tr from-primary to-accent">
-                <img
-                  src={imgSrc}
-                  alt="profile"
-                  className="w-9 h-9 rounded-[10px] object-cover border-2 border-white"
-                  onError={() => setImgSrc(defaultAvatar)}
-                />
+              <div onClick={handleProfileClick}>
+                <div className="relative p-0.5 rounded-xl bg-linear-to-tr from-primary to-accent">
+                  <img
+                    src={imgSrc}
+                    alt="profile"
+                    className="w-9 h-9 rounded-[10px] object-cover border-2 border-white"
+                    onError={() => setImgSrc(defaultAvatar)}
+                  />
+                </div>
               </div>
+
               {dropdownOpen && (
                 <ProfileDropdown
                   user={user}
@@ -174,6 +206,7 @@ const NavBar = () => {
         </div>
 
         <button
+          data-mobile-menu-button
           className="md:hidden p-2 text-secondary bg-secondary rounded-xl"
           onClick={() => setMenuOpen(true)}
         >
@@ -182,19 +215,45 @@ const NavBar = () => {
       </nav>
 
       {menuOpen && (
-        <div className="fixed inset-0 z-60 md:hidden">
+        <div className="fixed inset-0 z-[60] md:hidden">
           <div
             className="absolute inset-0 bg-slate-900/40 backdrop-blur-sm"
             onClick={() => setMenuOpen(false)}
           ></div>
-          <div className="absolute right-0 w-72 h-full bg-background-soft p-8 shadow-2xl flex flex-col">
-            <button
-              className="self-end p-2 text-muted"
-              onClick={() => setMenuOpen(false)}
-            >
-              <HiX size={20} />
-            </button>
-            <div className="mt-12 flex flex-col gap-3">
+
+          <div
+            ref={mobileMenuRef}
+            className="absolute right-0 w-72 h-full bg-background-soft p-6 shadow-2xl flex flex-col border-l border-primary/10"
+          >
+            <div className="flex items-center justify-between">
+              <div className="text-lg font-black text-primary">Menu</div>
+              <button
+                className="p-2 text-muted"
+                onClick={() => setMenuOpen(false)}
+              >
+                <HiX size={20} />
+              </button>
+            </div>
+
+            <div className="mt-6 flex items-center justify-between rounded-2xl border border-primary/10 bg-primary/5 p-3">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-muted">
+                  Theme
+                </p>
+                <p className="text-xs font-bold text-primary">
+                  {darkMode ? "Dark Mode" : "Light Mode"}
+                </p>
+              </div>
+              <button
+                onClick={toggleTheme}
+                className="p-3 rounded-xl bg-secondary text-primary"
+                title="Toggle Theme"
+              >
+                {darkMode ? <FaSun size={14} /> : <FaMoon size={14} />}
+              </button>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3">
               {links.map((link) => (
                 <NavLink
                   key={link.id}
@@ -202,9 +261,53 @@ const NavBar = () => {
                   onClick={() => setMenuOpen(false)}
                   className={navStyle}
                 >
-                  <link.icon size={18} /> {link.name}
+                  <link.icon size={18} />
+                  {link.name}
                 </NavLink>
               ))}
+            </div>
+
+            <div className="mt-6 border-t border-primary/10 pt-6">
+              {isAuthLoading && !user ? (
+                <div className="flex items-center justify-center py-4">
+                  <div className="w-6 h-6 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+                </div>
+              ) : user ? (
+                <div className="space-y-4">
+                  <button
+                    onClick={handleMobileProfile}
+                    className="w-full flex items-center gap-3 p-3 rounded-2xl bg-primary/5 border border-primary/10"
+                  >
+                    <img
+                      src={imgSrc}
+                      alt="profile"
+                      className="w-10 h-10 rounded-xl object-cover border border-white"
+                      onError={() => setImgSrc(defaultAvatar)}
+                    />
+                    <div className="text-left">
+                      <p className="text-xs font-black text-primary">
+                        {user?.name || "User"}
+                      </p>
+                      <p className="text-[10px] text-muted">View Profile</p>
+                    </div>
+                  </button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <button
+                    onClick={openSigninModal}
+                    className="w-full px-5 py-3 rounded-xl border bg-secondary border-primary/10 text-[11px] font-black uppercase tracking-widest text-secondary hover:text-primary hover:bg-primary/5 transition-colors"
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={openSignupModal}
+                    className="w-full px-5 py-3 rounded-xl bg-primary text-white text-[11px] font-black uppercase tracking-widest hover:opacity-90 transition-all"
+                  >
+                    Get Started
+                  </button>
+                </div>
+              )}
             </div>
           </div>
         </div>

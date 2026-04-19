@@ -9,7 +9,7 @@ import {
   fetchActiveUsersCount,
   setActiveUsers,
 } from "../features/presence/presenceSlice";
-import { createAppSocket } from "../services/socket.js";
+import { socket } from "../services/socket";
 
 function Home() {
   const dispatch = useDispatch();
@@ -19,28 +19,33 @@ function Home() {
 
   useEffect(() => {
     dispatch(fetchActiveUsersCount());
+
     const intervalId = setInterval(() => {
       dispatch(fetchActiveUsersCount());
     }, 30 * 1000);
+
     return () => clearInterval(intervalId);
   }, [dispatch]);
 
   useEffect(() => {
     if (!user?._id) return;
 
-    socketRef.current = createAppSocket();
-    socketRef.current.on("app:active-users", (payload) => {
+    socketRef.current = socket;
+
+    if (!socketRef.current.connected) {
+      socketRef.current.connect();
+    }
+
+    const handleActiveUsers = (payload) => {
       if (typeof payload?.activeUsers === "number") {
         dispatch(setActiveUsers(payload.activeUsers));
       }
-    });
+    };
+
+    socketRef.current.on("app:active-users", handleActiveUsers);
 
     return () => {
-      try {
-        socketRef.current?.disconnect();
-      } finally {
-        socketRef.current = null;
-      }
+      socketRef.current?.off("app:active-users", handleActiveUsers);
     };
   }, [dispatch, user?._id]);
 
@@ -55,7 +60,7 @@ function Home() {
         : "- online now";
 
   return (
-    <div className="">
+    <div>
       <Header
         activeUsers={activeUsers}
         activeUsersLoading={loading && activeUsers === null}
@@ -67,13 +72,16 @@ function Home() {
             <div className="p-3 bg-primary/10 rounded-2xl text-(--color-primary) shadow-inner">
               <FaUsers size={20} />
             </div>
+
             <div className="flex-1">
               <p className="text-[9px] text-(--color-primary) font-black uppercase tracking-widest leading-none mb-1">
                 Active Users
               </p>
+
               <p className="text-sm font-black text-primary tracking-tight">
                 {activeText}
               </p>
+
               {error ? (
                 <p className="mt-1 text-[10px] font-bold text-muted">
                   Unable to load live count right now.
@@ -83,6 +91,7 @@ function Home() {
           </div>
         </div>
       </div>
+
       <Features />
       <Footer />
     </div>

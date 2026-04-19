@@ -39,22 +39,27 @@ function App() {
 
   useEffect(() => {
     const isLoggedIn = localStorage.getItem("isLoggedIn") === "true";
+
     if (isLoggedIn) {
       dispatch(getProfile());
     }
+  }, [dispatch]);
 
+  useEffect(() => {
     const savedTheme = localStorage.getItem("theme") || "dark";
+
     if (savedTheme === "dark") {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
-  }, [dispatch]);
+  }, []);
 
   useEffect(() => {
     if (!user?._id) return;
 
     dispatch(sendHeartbeat());
+
     const intervalId = setInterval(() => {
       dispatch(sendHeartbeat());
     }, 60 * 1000);
@@ -71,7 +76,6 @@ function App() {
     "/profile/:id",
   ];
 
-  
   const isNavBarVisible =
     user?.role !== "admin" &&
     userPaths.some((path) => matchPath({ path, end: true }, location.pathname));
@@ -81,7 +85,6 @@ function App() {
       {isNavBarVisible && <NavBar />}
 
       <Routes>
-       
         <Route
           path="/"
           element={
@@ -89,8 +92,8 @@ function App() {
           }
         />
 
-      
         <Route path="/compiler" element={<Compiler />} />
+
         <Route
           path="/profile"
           element={
@@ -99,6 +102,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/profile/:id"
           element={
@@ -107,6 +111,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/search"
           element={
@@ -115,6 +120,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/quiz"
           element={
@@ -123,6 +129,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/quiz-arena/:id"
           element={
@@ -131,6 +138,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/mission-debrief"
           element={
@@ -139,6 +147,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/leetcode"
           element={
@@ -147,6 +156,7 @@ function App() {
             </ProtectedRoute>
           }
         />
+
         <Route
           path="/leetcode/:slug"
           element={

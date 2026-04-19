@@ -28,7 +28,6 @@ import {
   SiRust,
   SiPhp,
 } from "react-icons/si";
-
 import AIChatbot from "../components/AIChatbot.jsx";
 
 const Compiler = () => {
@@ -47,10 +46,13 @@ const Compiler = () => {
 
   const [activeTab, setActiveTab] = useState("console");
   const [aiQuery, setAiQuery] = useState("");
+  const [language, setLanguage] = useState("javascript");
 
-  // 🔴 THEME TOGGLE STATE
   const [isDarkMode, setIsDarkMode] = useState(() =>
     document.documentElement.classList.contains("dark"),
+  );
+  const [editorTheme, setEditorTheme] = useState(
+    document.documentElement.classList.contains("dark") ? "vs-dark" : "light",
   );
 
   const languages = useMemo(
@@ -59,80 +61,101 @@ const Compiler = () => {
         id: "javascript",
         name: "JavaScript",
         icon: <SiJavascript />,
-        ext: "js",
-        defaultCode: `// OrbitonCX JS\nconsole.log("Hello, Universe!");`,
+        nameDisplay: "JavaScript",
+        defaultCode: `// OrbitonCX JS
+console.log("Hello, Universe!");`,
       },
       {
         id: "python",
         name: "Python",
         icon: <SiPython />,
-        ext: "py",
-        defaultCode: `# OrbitonCX Python\nprint("Hello, Universe!")`,
+        nameDisplay: "Python",
+        defaultCode: `# OrbitonCX Python
+print("Hello, Universe!")`,
       },
       {
         id: "java",
         name: "Java",
         icon: <SiOpenjdk />,
-        ext: "java",
-        defaultCode: `public class Main {\n  public static void main(String[] args) {\n    System.out.println("Hello, Universe!");\n  }\n}`,
+        nameDisplay: "Java",
+        defaultCode: `public class Main {
+  public static void main(String[] args) {
+    System.out.println("Hello, Universe!");
+  }
+}`,
       },
       {
         id: "cpp",
         name: "cpp",
         nameDisplay: "C++",
         icon: <SiCplusplus />,
-        ext: "cpp",
-        defaultCode: `#include <iostream>\n\nint main() {\n    std::cout << "Hello, Universe!" << std::endl;\n    return 0;\n}`,
+        defaultCode: `#include <iostream>
+
+int main() {
+  std::cout << "Hello, Universe!" << std::endl;
+  return 0;
+}`,
       },
       {
         id: "c",
         name: "c",
         nameDisplay: "C",
         icon: <SiCplusplus />,
-        ext: "c",
-        defaultCode: `#include <stdio.h>\n\nint main() {\n    printf("Hello, Universe!\\n");\n    return 0;\n}`,
+        defaultCode: `#include <stdio.h>
+
+int main() {
+  printf("Hello, Universe!\\n");
+  return 0;
+}`,
       },
       {
         id: "go",
         name: "go",
         nameDisplay: "Go",
         icon: <SiGo />,
-        ext: "go",
-        defaultCode: `package main\n\nimport "fmt"\n\nfunc main() {\n    fmt.Println("Hello, Universe!")\n}`,
+        defaultCode: `package main
+
+import "fmt"
+
+func main() {
+  fmt.Println("Hello, Universe!")
+}`,
       },
       {
         id: "rust",
         name: "rust",
         nameDisplay: "Rust",
         icon: <SiRust />,
-        ext: "rs",
-        defaultCode: `fn main() {\n    println!("Hello, Universe!");\n}`,
+        defaultCode: `fn main() {
+  println!("Hello, Universe!");
+}`,
       },
       {
         id: "php",
         name: "php",
         nameDisplay: "PHP",
         icon: <SiPhp />,
-        ext: "php",
-        defaultCode: `<?php\necho "Hello, Universe!";\n?>`,
+        defaultCode: `<?php
+echo "Hello, Universe!";
+?>`,
       },
     ],
     [],
   );
 
-  const [language, setLanguage] = useState("javascript");
-  const [editorTheme, setEditorTheme] = useState(
-    isDarkMode ? "vs-dark" : "light",
-  );
-
   const currentLang = useMemo(
-    () => languages.find((l) => l.id === language),
+    () => languages.find((l) => l.id === language) || languages[0],
     [languages, language],
   );
+
   const editorLanguage =
     language === "cpp" ? "cpp" : language === "c" ? "c" : language;
 
-  // 🔴 THEME TOGGLE HANDLER
+  const safeCode =
+    typeof code === "string" && code.length > 0
+      ? code
+      : currentLang.defaultCode;
+
   const toggleTheme = () => {
     const isDark = document.documentElement.classList.toggle("dark");
     setIsDarkMode(isDark);
@@ -145,64 +168,119 @@ const Compiler = () => {
       setIsDarkMode(isDark);
       setEditorTheme(isDark ? "vs-dark" : "light");
     });
+
     observer.observe(document.documentElement, {
       attributes: true,
       attributeFilter: ["class"],
     });
+
     return () => observer.disconnect();
   }, []);
 
   useEffect(() => {
-    if (authLoading) return;
-    dispatch(clearOutput());
-    if (user?._id) {
-      dispatch(loadDraftAction({ userId: user._id, language }));
-    } else {
-      dispatch(setCode(currentLang?.defaultCode || ""));
+    // immediate fallback, so refresh blank varilla
+    if (!code || typeof code !== "string") {
+      dispatch(setCode(currentLang.defaultCode));
     }
+  }, [dispatch, currentLang, code]);
+
+  useEffect(() => {
+    dispatch(clearOutput());
+
+    const loadCompilerData = async () => {
+      const fallbackCode = currentLang.defaultCode;
+
+      // auth still checking -> keep fallback code, do nothing
+      if (authLoading) return;
+
+      // no logged-in user -> just use default
+      if (!user?._id) {
+        dispatch(setCode(fallbackCode));
+        return;
+      }
+
+      try {
+        const resultAction = await dispatch(
+          loadDraftAction({ userId: user._id, language }),
+        );
+
+        if (loadDraftAction.fulfilled.match(resultAction)) {
+          const loadedCode = resultAction.payload?.code;
+
+          if (typeof loadedCode !== "string" || !loadedCode.trim()) {
+            dispatch(setCode(fallbackCode));
+          }
+        } else {
+          dispatch(setCode(fallbackCode));
+        }
+      } catch {
+        dispatch(setCode(fallbackCode));
+      }
+    };
+
+    loadCompilerData();
   }, [dispatch, authLoading, user?._id, language, currentLang]);
 
   useEffect(() => {
     if (
+      authLoading ||
       !user?._id ||
       loadingDraft ||
       !isInitialized ||
       typeof code !== "string"
-    )
+    ) {
       return;
+    }
+
     const timer = setTimeout(() => {
       dispatch(saveDraftAction({ userId: user._id, language, code }));
     }, 1500);
-    return () => clearTimeout(timer);
-  }, [dispatch, user?._id, language, code, loadingDraft, isInitialized]);
 
-  const handleLanguageChange = (e) => setLanguage(e.target.value);
+    return () => clearTimeout(timer);
+  }, [
+    dispatch,
+    authLoading,
+    user?._id,
+    language,
+    code,
+    loadingDraft,
+    isInitialized,
+  ]);
+
+  const handleLanguageChange = (e) => {
+    setLanguage(e.target.value);
+  };
+
   const handleEditorChange = useCallback(
-    (value) => dispatch(setCode(value || "")),
+    (value) => {
+      dispatch(setCode(typeof value === "string" ? value : ""));
+    },
     [dispatch],
   );
 
   const runCode = useCallback(() => {
-    dispatch(runCodeAction({ language, code, userId: user?._id || null }));
+    dispatch(
+      runCodeAction({
+        language,
+        code: safeCode,
+        userId: user?._id || null,
+      }),
+    );
     setActiveTab("console");
-  }, [dispatch, language, code, user?._id]);
+  }, [dispatch, language, safeCode, user?._id]);
 
   const handleAskAIAboutError = () => {
     setActiveTab("ai");
     setAiQuery(
-      `I got this error when running my ${currentLang.name} code. Can you explain what went wrong and give me a hint to fix it?\n\nError:\n${error}`,
+      `I got this error when running my ${currentLang.name} code. Can you explain what went wrong and give me a hint to fix it?\n\nError:\n${error || ""}`,
     );
   };
-
-  if (authLoading) return null;
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 pt-2 font-sans bg-[var(--color-background)] text-[var(--text-color-primary)] transition-colors duration-300">
       <div className="w-full max-w-[1450px] h-[95vh] flex flex-col bg-[var(--color-background-soft)] rounded-[2rem] overflow-hidden border border-[var(--border-color-primary)] shadow-[0_10px_40px_-10px_rgba(0,0,0,0.3)] transition-all duration-500">
-        {/* HEADER SECTION */}
         <div className="h-16 px-6 flex items-center justify-between bg-[var(--color-background-elevated)]/80 backdrop-blur-md border-b border-[var(--border-color-primary)] shrink-0 z-10">
           <div className="flex items-center gap-6">
-            {/* BACK BUTTON */}
             <button
               onClick={() => navigate(-1)}
               className="group flex items-center gap-2 text-[var(--text-color-muted)] hover:text-[var(--color-primary)] transition-all font-black text-[11px] uppercase tracking-widest active:scale-95 bg-[var(--color-background-soft)] px-3 py-2 rounded-xl border border-transparent hover:border-[var(--border-color-primary)]"
@@ -214,7 +292,6 @@ const Compiler = () => {
               <span className="hidden sm:block">Back</span>
             </button>
 
-            {/* THEME TOGGLE BUTTON */}
             <button
               onClick={toggleTheme}
               className="p-2.5 rounded-xl bg-[var(--color-background-soft)] text-[var(--text-color-muted)] hover:text-[var(--color-primary)] border border-[var(--border-color-primary)] transition-all hover:scale-105 active:scale-95"
@@ -225,7 +302,6 @@ const Compiler = () => {
 
             <div className="h-6 w-px bg-[var(--border-color-primary)] hidden sm:block"></div>
 
-            {/* LANGUAGE SELECTOR */}
             <div className="relative flex items-center bg-[var(--color-background)] rounded-xl border border-[var(--border-color-primary)] hover:border-[var(--color-primary)] transition-all overflow-hidden shadow-sm group">
               <div className="flex items-center pl-4 pointer-events-none text-[var(--color-primary)] text-lg group-hover:scale-110 transition-transform">
                 {currentLang?.icon}
@@ -251,7 +327,6 @@ const Compiler = () => {
             </div>
           </div>
 
-          {/* RUN BUTTON */}
           <button
             onClick={runCode}
             disabled={compiling || loadingDraft}
@@ -271,15 +346,13 @@ const Compiler = () => {
           </button>
         </div>
 
-        {/* MAIN BODY */}
         <div className="flex-1 flex flex-col lg:flex-row overflow-hidden bg-[var(--color-background)]">
-          {/* CODE EDITOR */}
           <div className="flex-[3] relative border-b lg:border-b-0 lg:border-r border-[var(--border-color-primary)] pt-2">
             <Editor
               height="100%"
               theme={editorTheme}
               language={editorLanguage}
-              value={code}
+              value={safeCode}
               onChange={handleEditorChange}
               options={{
                 fontSize: 15,
@@ -295,9 +368,7 @@ const Compiler = () => {
             />
           </div>
 
-          {/* RIGHT PANEL */}
           <div className="flex-[2] min-w-[380px] flex flex-col bg-[var(--color-background-soft)]">
-            {/* TABS HEADER */}
             <div className="flex border-b border-[var(--border-color-primary)] bg-[var(--color-background-elevated)] p-1.5 gap-1.5 shrink-0">
               <button
                 onClick={() => setActiveTab("console")}
@@ -308,9 +379,6 @@ const Compiler = () => {
                 }`}
               >
                 <HiTerminal size={16} /> Console Output
-                {activeTab === "console" && (
-                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[2px] bg-[var(--color-primary)] rounded-t-full" />
-                )}
               </button>
 
               <button
@@ -324,15 +392,11 @@ const Compiler = () => {
                 <HiSparkles
                   size={16}
                   className={activeTab === "ai" ? "animate-pulse" : ""}
-                />{" "}
+                />
                 AI Assistant
-                {activeTab === "ai" && (
-                  <div className="absolute bottom-0 left-1/2 -translate-x-1/2 w-1/2 h-[2px] bg-[var(--color-accent)] rounded-t-full" />
-                )}
               </button>
             </div>
 
-            {/* TAB CONTENTS */}
             {activeTab === "console" ? (
               <div className="flex-1 flex flex-col overflow-hidden relative">
                 <div className="absolute top-2 right-4 z-10">
@@ -347,7 +411,7 @@ const Compiler = () => {
 
                 <div className="flex-1 p-6 pt-12 font-mono text-[13px] overflow-y-auto leading-relaxed bg-[#050505] shadow-inner text-[#f8fafc]">
                   {error ? (
-                    <div className="flex flex-col items-start gap-5 animate-in fade-in duration-300">
+                    <div className="flex flex-col items-start gap-5">
                       <div className="w-full p-4 rounded-xl bg-[var(--color-danger-glow)] border border-[var(--color-danger)]/30 text-[var(--color-danger)]">
                         <div className="flex items-center gap-2 mb-2 font-black text-[10px] tracking-widest uppercase">
                           <div className="w-2 h-2 rounded-full bg-[var(--color-danger)] animate-pulse"></div>
@@ -370,7 +434,7 @@ const Compiler = () => {
                       </button>
                     </div>
                   ) : reduxOutput ? (
-                    <pre className="whitespace-pre-wrap text-[var(--color-success)] font-medium animate-in fade-in">
+                    <pre className="whitespace-pre-wrap text-[var(--color-success)] font-medium">
                       {reduxOutput}
                     </pre>
                   ) : (
@@ -388,7 +452,7 @@ const Compiler = () => {
             ) : (
               <div className="flex-1 overflow-hidden bg-[var(--color-background)]">
                 <AIChatbot
-                  code={code}
+                  code={safeCode}
                   language={language}
                   compilerOutput={error || reduxOutput || ""}
                   error={error}

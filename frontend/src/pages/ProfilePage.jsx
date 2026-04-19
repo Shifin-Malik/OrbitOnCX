@@ -38,7 +38,6 @@ function ProfilePage() {
     (state) => state.activity,
   );
 
-  console.log(activities, totalAcceptedSubmissions);
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const fileInputRef = useRef(null);

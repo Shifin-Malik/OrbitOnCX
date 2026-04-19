@@ -14,10 +14,6 @@ const ProfileStats = ({ user }) => {
     dispatch(fetchProblems({ page: 1, limit: 100 }));
   }, [dispatch]);
 
-  console.log("Problems list:", list);
-  console.log("Problems count in list:", list.length);
-  console.log("Total problems in DB:", total);
-
   const solved = user?.stats?.totalSolved || 0;
   const totalProblems = total || list.length || 100;
   const offset = 502 - 502 * (solved / totalProblems);

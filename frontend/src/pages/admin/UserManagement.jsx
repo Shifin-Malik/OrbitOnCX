@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useDispatch, useSelector } from "react-redux";
 import {
   blockUser,
@@ -11,7 +11,7 @@ import {
   unblockUser,
 } from "../../features/admin/adminSlice.js";
 import UserDetailsModal from "../../components/admin/UserDetailsModal.jsx";
-import { createAppSocket } from "../../services/socket.js";
+import { socket } from "../../services/socket.js"; // ✅ FIXED
 import {
   FaTrash,
   FaPlus,
@@ -21,18 +21,16 @@ import {
   FaLockOpen,
   FaSearch,
   FaEye,
-  FaCircle,
 } from "react-icons/fa";
 import { toast } from "react-hot-toast";
 
 const UserManagement = () => {
   const dispatch = useDispatch();
   const socketRef = useRef(null);
-  const {
-    users = [],
-    loading,
-    pagination,
-  } = useSelector((state) => state.admin);
+
+  const { users = [], loading, pagination } = useSelector(
+    (state) => state.admin,
+  );
 
   const [searchTerm, setSearchTerm] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
@@ -42,10 +40,12 @@ const UserManagement = () => {
   const [selectedUser, setSelectedUser] = useState(null);
   const [processingId, setProcessingId] = useState(null);
 
+
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchTerm), 300);
     return () => clearTimeout(t);
   }, [searchTerm]);
+
 
   useEffect(() => {
     dispatch(
@@ -59,61 +59,38 @@ const UserManagement = () => {
     );
   }, [dispatch, currentPage, debouncedSearch, roleFilter, statusFilter]);
 
-  const handleToggleBlock = async (user) => {
-    setProcessingId(user._id);
-    if (user.status === "Deleted" || user.isDeleted) {
-      toast.error("User is deleted");
-      setProcessingId(null);
-      return;
-    }
-    const isBlocked = user.status === "Blocked" || user.isBlocked;
-    try {
-      if (isBlocked) {
-        await dispatch(unblockUser(user._id)).unwrap();
-        toast.success("Access Restored");
-      } else {
-        await dispatch(blockUser(user._id)).unwrap();
-        toast.error("Access Restricted");
-      }
-    } catch (err) {
-      toast.error("Action Failed");
-    } finally {
-      setProcessingId(null);
-    }
-  };
 
-  const handleSoftDelete = async (user) => {
-    setProcessingId(user._id);
-    try {
-      await dispatch(softDeleteUser(user._id)).unwrap();
-      toast.success("User Deleted");
-    } catch (err) {
-      toast.error("Delete Failed");
-    } finally {
-      setProcessingId(null);
-    }
-  };
-
-  // Socket logic remains unchanged
   useEffect(() => {
-    socketRef.current = createAppSocket();
-    socketRef.current.on("user:online", (p) => dispatch(presenceUserOnline(p)));
-    socketRef.current.on("user:offline", (p) =>
-      dispatch(presenceUserOffline(p)),
-    );
-    socketRef.current.on("presence:bulk-sync", (p) =>
-      dispatch(presenceBulkSync(p)),
-    );
+    socketRef.current = socket;
+
+    if (!socketRef.current.connected) {
+      socketRef.current.connect();
+    }
+
+    const handleOnline = (p) => dispatch(presenceUserOnline(p));
+    const handleOffline = (p) => dispatch(presenceUserOffline(p));
+    const handleBulk = (p) => dispatch(presenceBulkSync(p));
+
+    socketRef.current.on("user:online", handleOnline);
+    socketRef.current.on("user:offline", handleOffline);
+    socketRef.current.on("presence:bulk-sync", handleBulk);
+
     return () => {
-      socketRef.current?.disconnect();
+      socketRef.current?.off("user:online", handleOnline);
+      socketRef.current?.off("user:offline", handleOffline);
+      socketRef.current?.off("presence:bulk-sync", handleBulk);
     };
   }, [dispatch]);
-
+  
   useEffect(() => {
-    if (!socketRef.current) return;
+    if (!socketRef.current?.connected) return;
+
     const userIds = (users || []).map((u) => u._id).filter(Boolean);
+
     socketRef.current.emit("presence:bulk-sync", { userIds });
   }, [users]);
+
+
 
   if (loading && users.length === 0)
     return (

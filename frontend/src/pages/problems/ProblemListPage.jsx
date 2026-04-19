@@ -29,7 +29,6 @@ const ProblemListPage = () => {
   );
 
   const { user } = useSelector((state) => state.auth);
-  console.log(user.stats.totalSolved);
 
   const [query, setQuery] = useState("");
   const [difficulty, setDifficulty] = useState("");
@@ -46,8 +45,6 @@ const ProblemListPage = () => {
     }),
     [query, difficulty, status, pageNum],
   );
-
-  console.log(user);
 
   useEffect(() => {
     const t = setTimeout(() => {

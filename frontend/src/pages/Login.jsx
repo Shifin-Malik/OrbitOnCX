@@ -24,7 +24,7 @@ import {
   forgotPassword,
   resetPassword,
   resetAuthState,
-  getProfile
+  getProfile,
 } from "../features/auth/authSlice";
 import { useNavigate } from "react-router-dom";
 
@@ -38,21 +38,23 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
 
   const googleLoginHandler = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
-  try {
-    await dispatch(
-      googleLoginAction(tokenResponse.access_token)
-    ).unwrap();
-    await dispatch(getProfile()).unwrap();
+      try {
+        await dispatch(googleLoginAction(tokenResponse.access_token)).unwrap();
 
-    dispatch(resetCompilerState());
-    dispatch(resetAuthState());
-    onClose();
+        const profile = await dispatch(getProfile()).unwrap();
 
-    navigate("/");
-  } catch (error) {
-    toast.error("Google Login Failed");
-  }
-},
+        dispatch(resetCompilerState());
+        onClose();
+
+        if (profile?.user?.role === "admin" || profile?.role === "admin") {
+          navigate("/admin", { replace: true });
+        } else {
+          navigate("/", { replace: true });
+        }
+      } catch (error) {
+        toast.error("Google Login Failed");
+      }
+    },
     onError: () => toast.error("Google Login Failed"),
   });
 
@@ -89,7 +91,6 @@ function Login({ isOpen, onClose, initialMode = "signin" }) {
         setMode("signin");
         setFormData((prev) => ({ ...prev, otp: "", password: "" }));
       } else if (mode === "signin") {
-  
         dispatch(resetCompilerState());
         dispatch(resetAuthState());
         onClose();

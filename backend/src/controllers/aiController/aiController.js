@@ -1,5 +1,5 @@
 import asyncHandler from "express-async-handler";
-import { getMentorReply } from "../../services/geminiService.js";
+import { getMentorReply } from "../../services/groqService.js";
 
 export const chatWithAi = asyncHandler(async (req, res) => {
   const body = req.body && typeof req.body === "object" ? req.body : {};
@@ -21,17 +21,22 @@ export const chatWithAi = asyncHandler(async (req, res) => {
     });
   } catch (error) {
     if (error.message === "Message is required") {
-      res.status(400);
-      throw new Error("Message is required");
+      return res.status(400).json({
+        success: false,
+        message: "Message is required",
+      });
     }
 
-    if (error.message === "GEMINI_API_KEY is not configured") {
-      res.status(500);
-      throw new Error("AI service is not configured");
+    if (error.message === "GROQ_API_KEY is not configured") {
+      return res.status(500).json({
+        success: false,
+        message: "AI service is not configured",
+      });
     }
 
-    res.status(502);
-    throw new Error("Failed to get AI response");
+    return res.status(502).json({
+      success: false,
+      message: "Failed to get AI response",
+    });
   }
 });
-
