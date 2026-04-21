@@ -334,121 +334,7 @@ export const getLeaderboard = async (req, res) => {
     });
   }
 };
-// export const getLeaderboard = async (req, res) => {
-//   try {
-//     const quizId = req.params.quizId || req.query.quizId;
 
-//     if (quizId && !mongoose.Types.ObjectId.isValid(quizId)) {
-//       return res.status(400).json({
-//         success: false,
-//         message: "Invalid quizId",
-//       });
-//     }
-
-//     const matchStage = quizId
-//       ? { quizId: new mongoose.Types.ObjectId(quizId), status: "COMPLETED" }
-//       : { status: "COMPLETED" };
-
-//     const pipeline = quizId
-//       ? [
-//           { $match: matchStage },
-//           {
-//             $sort: { score: -1, timeTaken: 1, completedAt: -1, createdAt: -1 },
-//           },
-//           {
-//             $group: {
-//               _id: "$userId",
-//               bestAttemptId: { $first: "$_id" },
-//               score: { $first: "$score" },
-//               rank: { $first: "$rank" },
-//               xpGained: { $first: "$xpGained" },
-//               correctAnswers: { $first: "$correctAnswers" },
-//               wrongAnswers: { $first: "$wrongAnswers" },
-//               timeTaken: { $first: "$timeTaken" },
-//               completedAt: { $first: "$completedAt" },
-//             },
-//           },
-//           { $sort: { score: -1, timeTaken: 1, completedAt: -1 } },
-//           { $limit: 10 },
-//           {
-//             $lookup: {
-//               from: "users",
-//               localField: "_id",
-//               foreignField: "_id",
-//               pipeline: [{ $project: { _id: 1, name: 1, avatar: 1 } }],
-//               as: "user",
-//             },
-//           },
-//           { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
-//           {
-//             $project: {
-//               _id: "$bestAttemptId",
-//               user: 1,
-//               score: 1,
-//               rank: 1,
-//               xpGained: 1,
-//               correctAnswers: 1,
-//               wrongAnswers: 1,
-//               timeTaken: 1,
-//               completedAt: 1,
-//             },
-//           },
-//         ]
-//       : [
-//           { $match: matchStage },
-//           {
-//             $group: {
-//               _id: "$userId",
-//               totalXp: { $sum: "$xpGained" },
-//               missions: { $sum: 1 },
-//               lastCompletedAt: { $max: "$completedAt" },
-//             },
-//           },
-//           { $sort: { totalXp: -1, missions: -1, lastCompletedAt: -1 } },
-//           { $limit: 10 },
-//           {
-//             $lookup: {
-//               from: "users",
-//               localField: "_id",
-//               foreignField: "_id",
-//               pipeline: [{ $project: { _id: 1, name: 1, avatar: 1 } }],
-//               as: "user",
-//             },
-//           },
-//           { $unwind: { path: "$user", preserveNullAndEmptyArrays: true } },
-//           {
-//             $project: {
-//               _id: 0,
-//               user: 1,
-//               totalXp: 1,
-//               missions: 1,
-//               lastCompletedAt: 1,
-//             },
-//           },
-//         ];
-
-//     const [data, quiz] = await Promise.all([
-//       QuizAttempt.aggregate(pipeline),
-//       quizId
-//         ? Quiz.findById(quizId).select("title").lean()
-//         : Promise.resolve(null),
-//     ]);
-
-//     return res.status(200).json({
-//       success: true,
-//       mode: quizId ? "QUIZ" : "GLOBAL",
-//       ...(quizId && { quizId, quizTitle: quiz?.title || null }),
-//       count: data.length,
-//       data,
-//     });
-//   } catch (error) {
-//     console.error("getLeaderboard error:", error);
-//     return res.status(500).json({
-//       success: false,
-//       message: "Server error",
-//     });
-//   }
-// };
 
 export const submitQuiz = async (req, res) => {
   try {
@@ -456,16 +342,10 @@ export const submitQuiz = async (req, res) => {
     const userId = req.user?._id;
 
     if (!quizId || !mongoose.Types.ObjectId.isValid(quizId)) {
-      return res.status(400).json({
-        success: false,
-        message: "Invalid quizId",
-      });
+      return res.status(400).json({ success: false, message: "Invalid quizId" });
     }
 
-    if (
-      !Array.isArray(userAnswers) ||
-      userAnswers.length !== ARENA_QUESTION_COUNT
-    ) {
+    if (!Array.isArray(userAnswers) || userAnswers.length !== ARENA_QUESTION_COUNT) {
       return res.status(400).json({
         success: false,
         message: `Exactly ${ARENA_QUESTION_COUNT} answers must be submitted.`,
@@ -475,26 +355,162 @@ export const submitQuiz = async (req, res) => {
     const quizObjectId = new mongoose.Types.ObjectId(quizId);
     const userObjectId = new mongoose.Types.ObjectId(userId);
 
-    const questionIds = userAnswers
-      .map((a) => a?.questionId)
-      .filter((id) => mongoose.Types.ObjectId.isValid(id))
-      .map((id) => new mongoose.Types.ObjectId(id));
+    
+    const userAnswerDocs = userAnswers.map((a) => ({
+      questionId: new mongoose.Types.ObjectId(a?.questionId),
+      selectedOptionText: a?.selectedOptionText ?? a?.selectedOption ?? null,
+    }));
 
-    if (questionIds.length !== ARENA_QUESTION_COUNT) {
-      return res.status(400).json({
-        success: false,
-        message: "Each answer must include a valid questionId.",
-      });
-    }
+    const [quizResult, inProgressAttempt] = await Promise.all([
+      Quiz.aggregate([
+      
+        { $match: { _id: quizObjectId } },
+        { $project: { _id: 1, xpPotential: 1 } },
 
-    const [quiz, questions, inProgressAttempt] = await Promise.all([
-      Quiz.findById(quizObjectId).select("_id xpPotential").lean(),
-      Question.find({
-        _id: { $in: questionIds },
-        quizId: quizObjectId,
-      })
-        .select("_id options correctAnswer")
-        .lean(),
+  
+        {
+          $lookup: {
+            from: "questions",
+            localField: "_id",
+            foreignField: "quizId",
+            pipeline: [{ $project: { _id: 1, correctAnswer: 1, options: 1 } }],
+            as: "questions",
+          },
+        },
+
+        {
+          $match: {
+            [`questions.${ARENA_QUESTION_COUNT - 1}`]: { $exists: true },
+          },
+        },
+
+       
+        {
+          $addFields: {
+            userAnswers: userAnswerDocs,
+            answers: {
+              $map: {
+                input: "$questions",
+                as: "q",
+                in: {
+                  questionId: "$$q._id",
+                  correctAnswer: "$$q.correctAnswer",
+                  selectedOptionText: {
+                    $let: {
+                      vars: {
+                        matched: {
+                          $first: {
+                            $filter: {
+                              input: userAnswerDocs,
+                              as: "ua",
+                              cond: { $eq: ["$$ua.questionId", "$$q._id"] },
+                            },
+                          },
+                        },
+                      },
+                      in: "$$matched.selectedOptionText",
+                    },
+                  },
+                  isCorrect: {
+                    $let: {
+                      vars: {
+                        matched: {
+                          $first: {
+                            $filter: {
+                              input: userAnswerDocs,
+                              as: "ua",
+                              cond: { $eq: ["$$ua.questionId", "$$q._id"] },
+                            },
+                          },
+                        },
+                      },
+                      in: {
+                        $and: [
+                          { $ne: ["$$matched.selectedOptionText", null] },
+                          { $eq: ["$$matched.selectedOptionText", "$$q.correctAnswer"] },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+
+        
+        {
+          $addFields: {
+            correctAnswers: {
+              $size: {
+                $filter: {
+                  input: "$answers",
+                  as: "a",
+                  cond: { $eq: ["$$a.isCorrect", true] },
+                },
+              },
+            },
+          },
+        },
+
+       
+        {
+          $addFields: {
+            percentage: {
+              $multiply: [
+                { $divide: ["$correctAnswers", ARENA_QUESTION_COUNT] },
+                100,
+              ],
+            },
+          },
+        },
+        {
+          $addFields: {
+            score: { $round: ["$percentage", 0] },
+            xpGained: {
+              $round: [
+                {
+                  $multiply: [
+                    { $ifNull: ["$xpPotential", 0] },
+                    { $divide: ["$percentage", 100] },
+                  ],
+                },
+                0,
+              ],
+            },
+          },
+        },
+
+        
+        {
+          $addFields: {
+            answers: {
+              $map: {
+                input: "$answers",
+                as: "a",
+                in: {
+                  questionId: "$$a.questionId",
+                  selectedOptionText: "$$a.selectedOptionText",
+                  isCorrect: "$$a.isCorrect",
+                },
+              },
+            },
+          },
+        },
+
+        {
+          $project: {
+            _id: 1,
+            xpPotential: 1,
+            correctAnswers: 1,
+            percentage: 1,
+            score: 1,
+            xpGained: 1,
+            answers: 1,
+          },
+        },
+      ]),
+
       QuizAttempt.findOne({
         userId: userObjectId,
         quizId: quizObjectId,
@@ -505,53 +521,23 @@ export const submitQuiz = async (req, res) => {
         .lean(),
     ]);
 
-    if (!quiz) {
+    if (!quizResult?.length) {
       return res.status(404).json({
         success: false,
-        message: "Quiz not found",
+        message: "Quiz not found or question count mismatch.",
       });
     }
 
-    if (questions.length !== ARENA_QUESTION_COUNT) {
-      return res.status(400).json({
-        success: false,
-        message: "One or more questions are invalid for this quiz.",
-      });
-    }
+    const {
+      correctAnswers,
+      percentage,
+      score,
+      xpGained,
+      answers,
+    } = quizResult[0];
 
-    const questionMap = new Map(questions.map((q) => [String(q._id), q]));
-
-    const answers = userAnswers.map((answer) => {
-      const question = questionMap.get(String(answer.questionId));
-      const selectedOptionText =
-        answer?.selectedOptionText ?? answer?.selectedOption ?? null;
-
-      const selectedOption =
-        selectedOptionText == null
-          ? null
-          : question.options.indexOf(selectedOptionText);
-
-      const isCorrect =
-        selectedOptionText != null &&
-        selectedOptionText === question.correctAnswer;
-
-      return {
-        questionId: answer.questionId,
-        selectedOption: selectedOption >= 0 ? selectedOption : null,
-        selectedOptionText,
-        isCorrect,
-      };
-    });
-
-    const correctAnswers = answers.reduce(
-      (sum, answer) => sum + (answer.isCorrect ? 1 : 0),
-      0,
-    );
     const wrongAnswers = ARENA_QUESTION_COUNT - correctAnswers;
-    const percentage = (correctAnswers / ARENA_QUESTION_COUNT) * 100;
-    const score = Math.round(percentage);
     const rank = computeRank(percentage);
-    const xpGained = Math.round((quiz.xpPotential || 0) * (percentage / 100));
 
     const completedAt = new Date();
     const safeTimeTaken = parsePositiveInt(timeTaken);
@@ -560,10 +546,8 @@ export const submitQuiz = async (req, res) => {
       Math.max(
         0,
         Math.round(
-          (Date.now() -
-            new Date(inProgressAttempt?.createdAt || completedAt).getTime()) /
-            1000,
-        ),
+          (Date.now() - new Date(inProgressAttempt?.createdAt || completedAt).getTime()) / 1000
+        )
       );
 
     const attemptPayload = {
@@ -578,45 +562,45 @@ export const submitQuiz = async (req, res) => {
       answers,
     };
 
-    const attempt = inProgressAttempt
-      ? await QuizAttempt.findByIdAndUpdate(
-          inProgressAttempt._id,
-          { $set: attemptPayload },
-          { new: true },
-        ).lean()
-      : await QuizAttempt.create({
-          userId: userObjectId,
-          quizId: quizObjectId,
-          ...attemptPayload,
-        });
+    // --- Attempt save, rank agg, XP update — parallel ---
+    const [attempt, rankAggResult] = await Promise.all([
+      inProgressAttempt
+        ? QuizAttempt.findByIdAndUpdate(
+            inProgressAttempt._id,
+            { $set: attemptPayload },
+            { new: true }
+          ).lean()
+        : QuizAttempt.create({
+            userId: userObjectId,
+            quizId: quizObjectId,
+            ...attemptPayload,
+          }),
 
-    const [rankAgg] = await QuizAttempt.aggregate([
-      { $match: { quizId: quizObjectId, status: "COMPLETED" } },
-      { $group: { _id: "$userId", bestScore: { $max: "$score" } } },
-      {
-        $facet: {
-          higher: [
-            { $match: { bestScore: { $gt: score } } },
-            { $count: "count" },
-          ],
-          participants: [{ $count: "count" }],
+      QuizAttempt.aggregate([
+        { $match: { quizId: quizObjectId, status: "COMPLETED" } },
+        { $group: { _id: "$userId", bestScore: { $max: "$score" } } },
+        {
+          $facet: {
+            higher: [{ $match: { bestScore: { $gt: score } } }, { $count: "count" }],
+            participants: [{ $count: "count" }],
+          },
         },
-      },
+      ]),
+
+      xpGained > 0
+        ? User.updateOne(
+            { _id: userObjectId },
+            {
+              $inc: { quizScore: xpGained, totalXp: xpGained },
+              $set: { lastActivity: completedAt },
+            }
+          )
+        : Promise.resolve(),
     ]);
 
-    const higherCount = rankAgg?.higher?.[0]?.count ?? 0;
-    const totalParticipants = rankAgg?.participants?.[0]?.count ?? 0;
+    const higherCount = rankAggResult?.[0]?.higher?.[0]?.count ?? 0;
+    const totalParticipants = rankAggResult?.[0]?.participants?.[0]?.count ?? 0;
     const globalRank = higherCount + 1;
-
-    if (xpGained > 0) {
-      await User.updateOne(
-        { _id: userObjectId },
-        {
-          $inc: { quizScore: xpGained, totalXp: xpGained },
-          $set: { lastActivity: completedAt },
-        },
-      );
-    }
 
     return res.status(200).json({
       success: true,
@@ -636,10 +620,7 @@ export const submitQuiz = async (req, res) => {
     });
   } catch (error) {
     console.error("submitQuiz error:", error);
-    return res.status(500).json({
-      success: false,
-      message: "Server error",
-    });
+    return res.status(500).json({ success: false, message: "Server error" });
   }
 };
 
