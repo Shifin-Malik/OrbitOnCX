@@ -85,7 +85,15 @@ const normalizeOptions = (value) => {
   return [];
 };
 
-const normalizeCorrectAnswer = (value, options) => {
+const normalizeCorrectAnswer = (value, options, correctOption = "") => {
+  const normalizedCorrectOption = toTrimmedString(correctOption).toUpperCase();
+  if (/^[A-D]$/.test(normalizedCorrectOption) && options.length >= 4) {
+    const optionIndex = normalizedCorrectOption.charCodeAt(0) - 65;
+    if (options[optionIndex]) {
+      return options[optionIndex];
+    }
+  }
+
   const raw = toTrimmedString(value);
   if (!raw) return "";
 
@@ -121,6 +129,7 @@ export const normalizeQuestionInput = (raw = {}) => {
   const source = isPlainObject(parsed) ? parsed : {};
 
   const options = normalizeOptions(source.options ?? source.choices);
+  const correctOption = toTrimmedString(source.correctOption).toUpperCase();
 
   return {
     _id: source._id || source.id || null,
@@ -129,7 +138,9 @@ export const normalizeQuestionInput = (raw = {}) => {
     correctAnswer: normalizeCorrectAnswer(
       source.correctAnswer ?? source.answer,
       options,
+      correctOption,
     ),
+    correctOption: /^[A-D]$/.test(correctOption) ? correctOption : "",
     difficulty: toTrimmedString(source.difficulty) || "Easy",
     explanation: toTrimmedString(source.explanation),
   };

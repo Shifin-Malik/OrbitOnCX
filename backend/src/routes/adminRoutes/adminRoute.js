@@ -16,6 +16,7 @@ import {
   deleteQuiz,
   getAllQuizzes,
   getQuizById,
+  parseQuizPdf,
   previewQuizPdfImport,
   toggleQuizStatus,
   updateQuiz,
@@ -69,6 +70,7 @@ router.get("/dashboard/stats", getDashboardStats);
 // --- Quiz Management ---
 router.post("/quizzes", uploadQuiz.single("thumbnail"), createQuiz);
 router.get("/quizzes", getAllQuizzes);
+router.post("/quizzes/parse-pdf", uploadQuizPdf.single("file"), parseQuizPdf);
 router.post(
   "/quizzes/import/pdf/preview",
   uploadQuizPdf.single("file"),

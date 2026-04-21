@@ -469,6 +469,10 @@ export const previewQuizPdfImport = asyncHandler(async (req, res) => {
   const parseWarnings = [
     ...new Set([...extractionWarnings, ...parserWarnings].filter(Boolean)),
   ];
+  const parseSummary = {
+    ...(parsed.summary || {}),
+    warningCount: parseWarnings.length,
+  };
 
   if (parsed.questions.length === 0) {
     const usedOcrFallback = parseWarnings.some(
@@ -491,6 +495,7 @@ export const previewQuizPdfImport = asyncHandler(async (req, res) => {
         quiz: parsed.quizData,
         quizData: parsed.quizData,
         questions: [],
+        summary: parseSummary,
         ...parsed.meta,
         parseWarnings,
         warnings: parseWarnings,
@@ -507,6 +512,7 @@ export const previewQuizPdfImport = asyncHandler(async (req, res) => {
       quiz: parsed.quizData,
       quizData: parsed.quizData,
       questions: parsed.questions,
+      summary: parseSummary,
       meta: parsed.meta,
       parseWarnings,
       warnings: parseWarnings,
@@ -514,6 +520,8 @@ export const previewQuizPdfImport = asyncHandler(async (req, res) => {
     },
   });
 });
+
+export const parseQuizPdf = previewQuizPdfImport;
 
 export const commitQuizPdfImport = asyncHandler(async (req, res) => {
   const parsedPayload = parseRequestPayload(req.body);

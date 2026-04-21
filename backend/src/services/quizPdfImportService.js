@@ -887,6 +887,330 @@ export const extractQuizTextWithOcrFallback = async (
   };
 };
 
+const STRICT_SECTION_HEADING_REGEX =
+  /^(easy|medium|advanced)\s+questions?\s*[:\-]?\s*$/i;
+const STRICT_NUMBERED_QUESTION_REGEX = /^(\d{1,3})\s*[\).:-]\s*(.+)$/;
+const STRICT_OPTION_LINE_REGEX = /^([A-Da-d])\s*[\).:-]\s*(.+)$/;
+const ANSWER_OPTION_CAPTURE_REGEX =
+  /(?:^|\b)(?:option\s*)?([A-D])(?:\b|[\).:-])/i;
+const ANSWER_PREFIX_CLEAN_REGEX = /^(?:option\s*)?[A-D]\s*[\).:-]?\s*/i;
+
+const normalizeComparableText = (value) =>
+  String(value || "")
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, "");
+
+const buildQuestionFingerprint = (question = {}) => {
+  const normalizedQuestion = normalizeComparableText(question.q);
+  const normalizedOptions = Array.isArray(question.options)
+    ? question.options.map((option) => normalizeComparableText(option)).join("||")
+    : "";
+  const normalizedAnswer = normalizeComparableText(question.correctAnswer);
+
+  return `${normalizedQuestion}::${normalizedOptions}::${normalizedAnswer}`;
+};
+
+const resolveAnswerFromRaw = (answerRaw = "", options = []) => {
+  const normalizedAnswer = normalizeLine(answerRaw);
+  const orderedOptions = ["A", "B", "C", "D"].map(
+    (label, index) => options[index] || "",
+  );
+
+  if (!normalizedAnswer) {
+    return {
+      correctOption: "",
+      correctAnswer: "",
+    };
+  }
+
+  const optionMatch = normalizedAnswer.match(ANSWER_OPTION_CAPTURE_REGEX);
+  if (optionMatch) {
+    const optionLabel = optionMatch[1].toUpperCase();
+    const optionIndex = optionLabel.charCodeAt(0) - 65;
+
+    return {
+      correctOption: optionLabel,
+      correctAnswer: orderedOptions[optionIndex] || "",
+    };
+  }
+
+  const cleanedAnswer = normalizedAnswer.replace(ANSWER_PREFIX_CLEAN_REGEX, "").trim();
+  if (!cleanedAnswer) {
+    return {
+      correctOption: "",
+      correctAnswer: "",
+    };
+  }
+
+  const exactMatchIndex = orderedOptions.findIndex(
+    (option) =>
+      normalizeComparableText(option) === normalizeComparableText(cleanedAnswer),
+  );
+
+  if (exactMatchIndex >= 0) {
+    return {
+      correctOption: String.fromCharCode(65 + exactMatchIndex),
+      correctAnswer: orderedOptions[exactMatchIndex],
+    };
+  }
+
+  const inclusionMatchIndex = orderedOptions.findIndex((option) => {
+    const comparableOption = normalizeComparableText(option);
+    const comparableAnswer = normalizeComparableText(cleanedAnswer);
+
+    if (!comparableOption || !comparableAnswer) return false;
+    return (
+      comparableOption.includes(comparableAnswer) ||
+      comparableAnswer.includes(comparableOption)
+    );
+  });
+
+  if (inclusionMatchIndex >= 0) {
+    return {
+      correctOption: String.fromCharCode(65 + inclusionMatchIndex),
+      correctAnswer: orderedOptions[inclusionMatchIndex],
+    };
+  }
+
+  return {
+    correctOption: "",
+    correctAnswer: "",
+  };
+};
+
+const countQuestionsByDifficulty = (questions = []) => {
+  const counter = {
+    Easy: 0,
+    Medium: 0,
+    Advanced: 0,
+  };
+
+  questions.forEach((question) => {
+    const difficulty = parseDifficultyValue(question?.difficulty, "Easy");
+    counter[difficulty] += 1;
+  });
+
+  return counter;
+};
+
+const parseStrictStructuredQuestionSet = (
+  lines = [],
+  { defaultDifficulty = "Easy" } = {},
+) => {
+  const questions = [];
+  const invalidItems = [];
+  const parseWarnings = [];
+  const preface = [];
+  const seenFingerprints = new Set();
+
+  let duplicateCount = 0;
+  let detectedCount = 0;
+  let sectionHeadingCount = 0;
+  let currentSectionDifficulty = defaultDifficulty;
+  let currentQuestion = null;
+
+  const finalizeCurrentQuestion = () => {
+    if (!currentQuestion) return;
+
+    const rawQuestion = currentQuestion;
+    currentQuestion = null;
+
+    const questionText = normalizeLine(rawQuestion.questionText);
+    const options = ["A", "B", "C", "D"].map((label) =>
+      normalizeLine(rawQuestion.optionMap.get(label) || ""),
+    );
+    const nonEmptyOptions = options.filter(Boolean).length;
+    const answerResolution = resolveAnswerFromRaw(rawQuestion.answerRaw, options);
+    const difficulty = parseDifficultyValue(
+      rawQuestion.difficulty || currentSectionDifficulty,
+      defaultDifficulty,
+    );
+
+    const errors = [];
+    if (!questionText) {
+      errors.push("Question text is missing.");
+    }
+
+    if (nonEmptyOptions !== 4) {
+      errors.push(`Expected exactly 4 options (A-D), found ${nonEmptyOptions}.`);
+    }
+
+    if (!answerResolution.correctOption || !answerResolution.correctAnswer) {
+      errors.push("Answer line could not be mapped to options A-D.");
+    }
+
+    if (errors.length > 0) {
+      invalidItems.push({
+        index: rawQuestion.index,
+        raw: rawQuestion.rawLines.join("\n"),
+        errors,
+      });
+      parseWarnings.push(
+        `Question ${rawQuestion.index + 1} skipped: ${errors.join(" ")}`,
+      );
+      return;
+    }
+
+    const normalizedQuestion = normalizeQuestionInput({
+      q: questionText,
+      options,
+      correctAnswer: answerResolution.correctAnswer,
+      difficulty,
+      explanation: normalizeLine(rawQuestion.explanation),
+    });
+
+    normalizedQuestion.correctOption = answerResolution.correctOption;
+    normalizedQuestion.question = normalizedQuestion.q;
+
+    const fingerprint = buildQuestionFingerprint(normalizedQuestion);
+    if (fingerprint && seenFingerprints.has(fingerprint)) {
+      duplicateCount += 1;
+      invalidItems.push({
+        index: rawQuestion.index,
+        raw: rawQuestion.rawLines.join("\n"),
+        errors: ["Duplicate question detected in parsed PDF set."],
+      });
+      parseWarnings.push(
+        `Question ${rawQuestion.index + 1} skipped: duplicate content detected.`,
+      );
+      return;
+    }
+
+    if (fingerprint) {
+      seenFingerprints.add(fingerprint);
+    }
+
+    questions.push(normalizedQuestion);
+  };
+
+  lines.forEach((rawLine) => {
+    const line = normalizeLine(rawLine);
+    if (!line || isLikelyNoiseLine(line)) {
+      return;
+    }
+
+    const sectionMatch = line.match(STRICT_SECTION_HEADING_REGEX);
+    if (sectionMatch) {
+      finalizeCurrentQuestion();
+      currentSectionDifficulty = parseDifficultyValue(
+        sectionMatch[1],
+        currentSectionDifficulty,
+      );
+      sectionHeadingCount += 1;
+      return;
+    }
+
+    const questionStartMatch = line.match(STRICT_NUMBERED_QUESTION_REGEX);
+    if (questionStartMatch) {
+      finalizeCurrentQuestion();
+      const [, , questionText] = questionStartMatch;
+      currentQuestion = {
+        index: detectedCount,
+        questionText: questionText || "",
+        optionMap: new Map(),
+        answerRaw: "",
+        explanation: "",
+        difficulty: currentSectionDifficulty,
+        activeOption: "",
+        captureExplanation: false,
+        rawLines: [line],
+      };
+      detectedCount += 1;
+      return;
+    }
+
+    if (!currentQuestion) {
+      preface.push(line);
+      return;
+    }
+
+    currentQuestion.rawLines.push(line);
+
+    const difficultyMatch = line.match(DIFFICULTY_LINE_REGEX);
+    if (difficultyMatch) {
+      currentQuestion.difficulty = parseDifficultyValue(
+        difficultyMatch[1],
+        currentQuestion.difficulty,
+      );
+      currentQuestion.activeOption = "";
+      currentQuestion.captureExplanation = false;
+      return;
+    }
+
+    const answerMatch = line.match(ANSWER_LINE_REGEX);
+    if (answerMatch) {
+      currentQuestion.answerRaw = normalizeLine(answerMatch[1] || "");
+      currentQuestion.activeOption = "";
+      currentQuestion.captureExplanation = false;
+      return;
+    }
+
+    const explanationMatch = line.match(EXPLANATION_LINE_REGEX);
+    if (explanationMatch) {
+      currentQuestion.explanation = normalizeLine(explanationMatch[1] || "");
+      currentQuestion.captureExplanation = true;
+      currentQuestion.activeOption = "";
+      return;
+    }
+
+    const optionMatch = line.match(STRICT_OPTION_LINE_REGEX);
+    if (optionMatch) {
+      const optionLabel = String(optionMatch[1] || "").toUpperCase();
+      const optionValue = normalizeLine(optionMatch[2] || "");
+      currentQuestion.optionMap.set(optionLabel, optionValue);
+      currentQuestion.activeOption = optionLabel;
+      currentQuestion.captureExplanation = false;
+      return;
+    }
+
+    if (currentQuestion.captureExplanation) {
+      currentQuestion.explanation = normalizeLine(
+        `${currentQuestion.explanation} ${line}`,
+      );
+      return;
+    }
+
+    if (currentQuestion.activeOption && currentQuestion.optionMap.has(currentQuestion.activeOption)) {
+      currentQuestion.optionMap.set(
+        currentQuestion.activeOption,
+        normalizeLine(
+          `${currentQuestion.optionMap.get(currentQuestion.activeOption)} ${line}`,
+        ),
+      );
+      return;
+    }
+
+    if (currentQuestion.optionMap.size === 0) {
+      currentQuestion.questionText = normalizeLine(
+        `${currentQuestion.questionText} ${line}`,
+      );
+    }
+  });
+
+  finalizeCurrentQuestion();
+
+  if (sectionHeadingCount === 0) {
+    parseWarnings.push(
+      "No section heading (Easy Questions / Medium Questions / Advanced Questions) was detected. Default difficulty was used unless explicit question difficulty was found.",
+    );
+  }
+
+  if (detectedCount === 0) {
+    parseWarnings.push(
+      "No numbered questions were detected. Ensure each question starts with a numbered format like `1. ...`.",
+    );
+  }
+
+  return {
+    preface,
+    questions,
+    invalidItems,
+    parseWarnings,
+    detectedCount,
+    duplicateCount,
+  };
+};
+
 export const parseQuizQuestionsFromText = (
   text,
   { defaultDifficulty = "Easy", defaultCategory = "JavaScript" } = {},
@@ -899,54 +1223,46 @@ export const parseQuizQuestionsFromText = (
     : "JavaScript";
 
   const { lines, warnings: lineWarnings } = getLinesFromText(text);
-  const { blocks, preface } = splitIntoQuestionBlocks(lines);
+  const parsedQuestions = parseStrictStructuredQuestionSet(lines, {
+    defaultDifficulty: safeDifficulty,
+  });
 
-  const quizData = parseQuizMetadataFromPreface(preface, {
+  const quizData = parseQuizMetadataFromPreface(parsedQuestions.preface, {
     defaultDifficulty: safeDifficulty,
     defaultCategory: safeCategory,
   });
 
-  const questions = [];
-  const invalidItems = [];
-  const parseWarnings = [...lineWarnings];
+  const uniqueParseWarnings = [
+    ...new Set(
+      [...lineWarnings, ...(parsedQuestions.parseWarnings || [])].filter(Boolean),
+    ),
+  ];
+  const difficultyCounts = countQuestionsByDifficulty(parsedQuestions.questions);
 
-  blocks.forEach((block, index) => {
-    const parsed = parseSingleQuestionBlock(block, index, safeDifficulty);
-
-    if (parsed.usable) {
-      questions.push(parsed.question);
-    } else {
-      invalidItems.push({
-        index,
-        raw: parsed.raw,
-        errors: parsed.errors,
-      });
-    }
-
-    parsed.warnings.forEach((warning) => {
-      parseWarnings.push(`Question ${index + 1}: ${warning}`);
-    });
-
-    if (!parsed.usable && parsed.errors.length > 0) {
-      parseWarnings.push(
-        `Question ${index + 1} skipped: ${parsed.errors.join(" ")}`,
-      );
-    }
-  });
-
-  const uniqueParseWarnings = [...new Set(parseWarnings.filter(Boolean))];
+  const summary = {
+    totalParsed: parsedQuestions.detectedCount,
+    valid: parsedQuestions.questions.length,
+    duplicates: parsedQuestions.duplicateCount,
+    invalid: parsedQuestions.invalidItems.length,
+    warningCount: uniqueParseWarnings.length,
+    byDifficulty: difficultyCounts,
+  };
 
   return {
     quizData,
     quiz: quizData,
-    questions,
-    invalidItems,
+    questions: parsedQuestions.questions,
+    invalidItems: parsedQuestions.invalidItems,
     parseWarnings: uniqueParseWarnings,
     warnings: uniqueParseWarnings,
+    summary,
     meta: {
-      totalDetected: blocks.length,
-      validCount: questions.length,
-      invalidCount: invalidItems.length,
+      totalDetected: parsedQuestions.detectedCount,
+      validCount: parsedQuestions.questions.length,
+      invalidCount: parsedQuestions.invalidItems.length,
+      duplicateCount: parsedQuestions.duplicateCount,
+      warningCount: uniqueParseWarnings.length,
+      byDifficulty: difficultyCounts,
       parseWarnings: uniqueParseWarnings,
       warnings: uniqueParseWarnings,
     },

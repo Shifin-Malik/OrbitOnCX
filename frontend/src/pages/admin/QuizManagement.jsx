@@ -22,6 +22,7 @@ import {
   fetchAdminQuizById,
   fetchAdminQuizzes,
   previewAdminQuizPdf,
+  setSelectedQuizPdfFileName,
   toggleAdminQuizStatus,
   updateAdminQuiz,
 } from "../../features/admin/adminQuizSlice.js";
@@ -41,10 +42,15 @@ const QuizManagement = () => {
     togglingId,
     pdfPreview,
     pdfPreviewLoading,
+    pdfPreviewError,
+    parseSummary,
+    parseWarnings,
+    parseInvalidItems,
+    selectedPdfFileName,
     pdfCommitLoading,
   } = useSelector((state) => state.adminQuiz);
 
-  const [activeView, setActiveView] = useState(null); // { mode: "create" | "edit", quizId?: string }
+  const [activeView, setActiveView] = useState(null);
 
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 5;
@@ -187,6 +193,14 @@ const QuizManagement = () => {
         isEditLoading={isEditLoading}
         isSubmitting={submitting || pdfPreviewLoading || pdfCommitLoading}
         pdfPreview={pdfPreview}
+        pdfPreviewError={pdfPreviewError}
+        parseSummary={parseSummary}
+        parseWarnings={parseWarnings}
+        parseInvalidItems={parseInvalidItems}
+        selectedPdfFileName={selectedPdfFileName}
+        onPdfFileNameChange={(fileName) =>
+          dispatch(setSelectedQuizPdfFileName(fileName))
+        }
         onClearPdfPreview={() => dispatch(clearPdfPreview())}
         onBack={() => {
           dispatch(clearPdfPreview());

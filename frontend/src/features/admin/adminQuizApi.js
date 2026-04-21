@@ -18,10 +18,12 @@ export const deleteAdminQuizAPI = (quizId) =>
 export const toggleAdminQuizStatusAPI = (quizId, isActive) =>
   API.patch(`/admin/quizzes/${quizId}/toggle-status`, { isActive });
 
-export const previewAdminQuizPdfAPI = (formData) =>
-  API.post("/admin/quizzes/import/pdf/preview", formData, {
+export const parseAdminQuizPdfAPI = (formData) =>
+  API.post("/admin/quizzes/parse-pdf", formData, {
     headers: { "Content-Type": "multipart/form-data" },
   });
+
+export const previewAdminQuizPdfAPI = parseAdminQuizPdfAPI;
 
 export const commitAdminQuizPdfAPI = (payload) =>
   API.post("/admin/quizzes/import/pdf/commit", payload);

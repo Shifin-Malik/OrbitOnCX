@@ -38,6 +38,70 @@ const updateQuizCountInList = (state, quizId, totalQuestions) => {
   }
 };
 
+const extractPreviewWarnings = (preview) => {
+  if (Array.isArray(preview?.parseWarnings)) {
+    return preview.parseWarnings;
+  }
+
+  if (Array.isArray(preview?.warnings)) {
+    return preview.warnings;
+  }
+
+  if (Array.isArray(preview?.meta?.parseWarnings)) {
+    return preview.meta.parseWarnings;
+  }
+
+  if (Array.isArray(preview?.meta?.warnings)) {
+    return preview.meta.warnings;
+  }
+
+  return [];
+};
+
+const buildParseSummary = (preview = null) => {
+  if (!preview || typeof preview !== "object") {
+    return null;
+  }
+
+  if (preview.summary && typeof preview.summary === "object") {
+    return preview.summary;
+  }
+
+  return {
+    totalParsed: Number(preview?.meta?.totalDetected || 0),
+    valid: Number(preview?.meta?.validCount || 0),
+    duplicates: Number(preview?.meta?.duplicateCount || 0),
+    invalid: Number(preview?.meta?.invalidCount || 0),
+    warningCount: extractPreviewWarnings(preview).length,
+    byDifficulty: preview?.meta?.byDifficulty || {
+      Easy: 0,
+      Medium: 0,
+      Advanced: 0,
+    },
+  };
+};
+
+const applyParsePreviewState = (state, preview = null) => {
+  state.pdfPreview = preview;
+  state.parsedQuestions = Array.isArray(preview?.questions)
+    ? preview.questions
+    : [];
+  state.parseInvalidItems = Array.isArray(preview?.invalidItems)
+    ? preview.invalidItems
+    : [];
+  state.parseWarnings = extractPreviewWarnings(preview);
+  state.parseSummary = buildParseSummary(preview);
+};
+
+const resetParsePreviewState = (state) => {
+  state.pdfPreview = null;
+  state.parsedQuestions = [];
+  state.parseInvalidItems = [];
+  state.parseWarnings = [];
+  state.parseSummary = null;
+  state.selectedPdfFileName = "";
+};
+
 export const fetchAdminQuizzes = createAsyncThunk(
   "adminQuiz/fetchAdminQuizzes",
   async (params = {}, thunkAPI) => {
@@ -233,6 +297,11 @@ const initialState = {
   pdfPreview: null,
   pdfPreviewLoading: false,
   pdfPreviewError: null,
+  parsedQuestions: [],
+  parseInvalidItems: [],
+  parseWarnings: [],
+  parseSummary: null,
+  selectedPdfFileName: "",
   pdfCommitLoading: false,
   pdfCommitError: null,
 
@@ -248,8 +317,11 @@ const adminQuizSlice = createSlice({
       state.selectedQuiz = null;
       state.detailError = null;
     },
+    setSelectedQuizPdfFileName: (state, action) => {
+      state.selectedPdfFileName = String(action.payload || "").trim();
+    },
     clearPdfPreview: (state) => {
-      state.pdfPreview = null;
+      resetParsePreviewState(state);
       state.pdfPreviewError = null;
     },
     clearAdminQuizErrors: (state) => {
@@ -305,6 +377,7 @@ const adminQuizSlice = createSlice({
         state.submitting = false;
         state.selectedQuiz = action.payload || null;
         upsertQuizInList(state, action.payload);
+        resetParsePreviewState(state);
       })
       .addCase(createAdminQuiz.rejected, (state, action) => {
         state.submitting = false;
@@ -319,6 +392,7 @@ const adminQuizSlice = createSlice({
         state.submitting = false;
         state.selectedQuiz = action.payload || null;
         upsertQuizInList(state, action.payload);
+        resetParsePreviewState(state);
       })
       .addCase(updateAdminQuiz.rejected, (state, action) => {
         state.submitting = false;
@@ -363,11 +437,11 @@ const adminQuizSlice = createSlice({
       })
       .addCase(previewAdminQuizPdf.fulfilled, (state, action) => {
         state.pdfPreviewLoading = false;
-        state.pdfPreview = action.payload || null;
+        applyParsePreviewState(state, action.payload || null);
       })
       .addCase(previewAdminQuizPdf.rejected, (state, action) => {
         state.pdfPreviewLoading = false;
-        state.pdfPreview = null;
+        resetParsePreviewState(state);
         state.pdfPreviewError = action.payload;
       })
 
@@ -377,9 +451,9 @@ const adminQuizSlice = createSlice({
       })
       .addCase(commitAdminQuizPdf.fulfilled, (state, action) => {
         state.pdfCommitLoading = false;
-        state.pdfPreview = null;
         state.selectedQuiz = action.payload || null;
         upsertQuizInList(state, action.payload);
+        resetParsePreviewState(state);
       })
       .addCase(commitAdminQuizPdf.rejected, (state, action) => {
         state.pdfCommitLoading = false;
@@ -469,6 +543,7 @@ const adminQuizSlice = createSlice({
 
 export const {
   clearSelectedQuiz,
+  setSelectedQuizPdfFileName,
   clearPdfPreview,
   clearAdminQuizErrors,
 } = adminQuizSlice.actions;
