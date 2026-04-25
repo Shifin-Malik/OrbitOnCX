@@ -1,7 +1,7 @@
 import asyncHandler from "express-async-handler";
 import mongoose from "mongoose";
 import Submission from "../../models/SubmissionModel.js";
-import User from "../../models/UserModel.js";
+import User from "../../models/userModel.js";
 
 const ACCEPTED_STATUS_VALUES = [
   "accepted",

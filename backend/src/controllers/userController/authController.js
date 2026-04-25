@@ -4,7 +4,7 @@ import jwt from "jsonwebtoken";
 import otpGenerator from "otp-generator";
 import axios from "axios";
 
-import User from "../../models/UserModel.js";
+import User from "../../models/userModel.js";
 import redisClient from "../../config/redis.js";
 import { redisKeys } from "../../utlis/redisKeys.js";
 import { sendEmail } from "../../utlis/sendEmail.js";

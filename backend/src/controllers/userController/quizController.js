@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 import Quiz from "../../models/QuizModel.js";
 import Question from "../../models/QuestionModel.js";
 import QuizAttempt from "../../models/QuizAttempt.js";
-import User from "../../models/UserModel.js";
+import User from "../../models/userModel.js";
 
 const ARENA_QUESTION_COUNT = 10;
 

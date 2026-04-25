@@ -1,4 +1,4 @@
-import User from "../models/UserModel.js";
+import User from "../models/userModel.js";
 import DailyActivity from "../models/DailyActivityModel.js";
 import { getUTCDateKey, getUTCYesterdayKey } from "../utlis/dayKey.js";
 

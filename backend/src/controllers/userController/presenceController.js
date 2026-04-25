@@ -1,5 +1,5 @@
 import asyncHandler from "express-async-handler";
-import User from "../../models/UserModel.js";
+import User from "../../models/userModel.js";
 
 const ACTIVE_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 

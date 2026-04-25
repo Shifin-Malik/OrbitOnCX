@@ -1,6 +1,6 @@
 import asyncHandler from "express-async-handler";
 import bcrypt from "bcryptjs";
-import User from "../../models/UserModel.js";
+import User from "../../models/userModel.js";
 
 
 const EXCLUDE_FIELDS =
