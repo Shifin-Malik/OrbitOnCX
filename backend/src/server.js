@@ -44,6 +44,14 @@ app.get("/", (req, res) => {
   res.status(200).send("API Working Perfectly");
 });
 
+app.get("/health", (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Backend is alive",
+    time: new Date().toISOString(),
+  });
+});
+
 app.use(errorHandler);
 
 const startServer = async () => {
