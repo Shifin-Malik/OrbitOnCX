@@ -69,7 +69,10 @@ const startServer = async () => {
 
     const httpServer = http.createServer(app);
 
-    const corsOrigin = process.env.FRONTEND_URL || "http://localhost:5173";
+    const corsOrigin =
+      process.env.FRONTEND_URL ||
+      "http://localhost:5173" ||
+      "http://localhost:5174";
     const io = initSocket(httpServer, { corsOrigin });
     app.set("io", io);
 
