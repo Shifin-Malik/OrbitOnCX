@@ -1,7 +1,8 @@
 import React from "react";
 import { FaRocket, FaCheckCircle, FaUsers, FaTerminal } from "react-icons/fa";
-
+import { useNavigate } from "react-router-dom";
 function Header({ activeUsers, activeUsersLoading }) {
+  const navigate = useNavigate();
   const activeText = activeUsersLoading
     ? "Loading..."
     : typeof activeUsers === "number"
@@ -9,14 +10,9 @@ function Header({ activeUsers, activeUsersLoading }) {
       : "- online now";
 
   return (
-    // Adjusted padding for mobile screens
     <div className="relative min-h-[90vh] md:min-h-screen flex items-center justify-center overflow-hidden bg-background transition-colors duration-500 py-20 md:py-0">
       <div className="relative z-10 max-w-7xl mx-auto px-6 grid grid-cols-1 lg:grid-cols-2 gap-12 lg:gap-16 items-center">
-        
-        {/* Left Column: Text & CTA */}
-        {/* Added dynamic alignment: centered on mobile, left-aligned on large screens */}
         <div className="flex flex-col items-center lg:items-start text-center lg:text-left">
-          
           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-background-soft border border-primary mb-6 md:mb-8 shadow-sm group cursor-default">
             <span className="relative flex h-2 w-2">
               <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span>
@@ -27,7 +23,6 @@ function Header({ activeUsers, activeUsersLoading }) {
             </span>
           </div>
 
-          {/* Adjusted responsive text sizing */}
           <h1 className="text-4xl md:text-5xl lg:text-6xl font-black text-primary tracking-tighter mb-4 md:mb-6 leading-[1.05]">
             Build your <br />
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-primary via-accent to-primary-dark">
@@ -38,17 +33,15 @@ function Header({ activeUsers, activeUsersLoading }) {
           <p className="text-base md:text-lg text-secondary font-medium max-w-lg mb-8 md:mb-10 leading-relaxed mx-auto lg:mx-0">
             OrbitonCX brings teams together in a powerful real-time environment.
             Compile, debug, and ship with{" "}
-            <span className="text-primary font-bold">AI-powered</span>{" "}
-            insights.
+            <span className="text-primary font-bold">AI-powered</span> insights.
           </p>
 
-          {/* Buttons: Stacked full-width on mobile, side-by-side row on tablet+ */}
           <div className="flex flex-col sm:flex-row flex-wrap gap-4 items-center w-full sm:w-auto justify-center lg:justify-start">
-            <button className="w-full sm:w-auto justify-center px-8 py-3 rounded-2xl bg-primary text-background font-bold text-[11px] uppercase tracking-widest hover:bg-primary-dark hover:text-white hover:-translate-y-1 transition-all duration-300 shadow-xl shadow-black/10 flex items-center gap-3 active:scale-95">
+            <button
+              onClick={() => navigate("/compiler")}
+              className="w-full sm:w-auto justify-center px-8 py-3 rounded-2xl bg-primary text-background font-bold text-[11px] uppercase tracking-widest hover:bg-primary-dark hover:text-white hover:-translate-y-1 transition-all duration-300 shadow-xl shadow-black/10 flex items-center gap-3 active:scale-95"
+            >
               Get Started Free <FaRocket />
-            </button>
-            <button className="w-full sm:w-auto justify-center px-8 py-3 rounded-2xl bg-background-soft border border-primary text-primary font-bold text-[11px] uppercase tracking-widest hover:border-primary-dark hover:text-primary-dark transition-all active:scale-95 shadow-sm">
-              Live Demo
             </button>
           </div>
 
@@ -68,8 +61,6 @@ function Header({ activeUsers, activeUsersLoading }) {
           </div>
         </div>
 
-        {/* Right Column: Graphic */}
-        {/* Removed 'hidden md:block', added max-width for mobile constraint */}
         <div className="relative group mt-8 lg:mt-0 w-full max-w-md mx-auto lg:max-w-none">
           <div className="relative z-20 bg-background-soft/40 backdrop-blur-2xl border border-secondary/50 rounded-[2rem] lg:rounded-[3rem] p-2 shadow-2xl lg:rotate-3 group-hover:rotate-0 transition-all duration-700">
             <div className="bg-[#0D0D10] rounded-[1.5rem] lg:rounded-[2.5rem] p-6 lg:p-8 shadow-inner overflow-hidden border border-white/5">
@@ -107,7 +98,6 @@ function Header({ activeUsers, activeUsersLoading }) {
             </div>
           </div>
 
-          {/* Active Users Badge - Safely scaled and positioned for mobile to avoid overflow */}
           <div className="absolute -top-4 -right-2 sm:-top-6 sm:-right-6 lg:-top-8 lg:-right-8 z-30 bg-background-soft p-3 sm:p-5 rounded-2xl lg:rounded-3xl shadow-2xl border border-primary animate-bounce duration-[4000ms]">
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="p-2 sm:p-2.5 bg-primary/10 rounded-xl text-primary shadow-inner">
