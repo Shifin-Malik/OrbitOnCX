@@ -29,7 +29,6 @@ export const searchUser = (query) => {
   });
 };
 
-// --- Search History (Recent Searches) ---
 export const getSearchHistoryAPI = () => API.get("/users/search-history");
 export const addSearchHistoryAPI = (searchedUserId) =>
   API.post("/users/search-history", { searchedUserId });
