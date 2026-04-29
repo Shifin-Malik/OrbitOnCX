@@ -1,12 +1,11 @@
 import nodemailer from "nodemailer";
-import dns from "dns";
+import dns from "node:dns";
 
-// Force IPv4 first - fixes Render IPv6 ENETUNREACH issue
 dns.setDefaultResultOrder("ipv4first");
 
 export const sendEmail = async (email, subject, text, htmlContent = null) => {
   if (!process.env.EMAIL || !process.env.EMAIL_PASS) {
-    console.error("Missing Email Credentials in .env file");
+    console.error("Missing Email Credentials");
     return false;
   }
 
@@ -16,26 +15,23 @@ export const sendEmail = async (email, subject, text, htmlContent = null) => {
     secure: false,
     requireTLS: true,
     family: 4,
-
     auth: {
       user: process.env.EMAIL,
       pass: process.env.EMAIL_PASS,
     },
-
-    connectionTimeout: 20000,
+    connectionTimeout: 30000,
   });
 
-  const mailOptions = {
-    from: `"OrbitonCX Support" <${process.env.EMAIL}>`,
-    to: email,
-    subject,
-    text,
-    html: htmlContent || `<b>${text}</b>`,
-  };
-
   try {
-    const info = await transporter.sendMail(mailOptions);
-    console.log(`Email sent to ${email}: ${info.messageId}`);
+    const info = await transporter.sendMail({
+      from: `"OrbitonCX Support" <${process.env.EMAIL}>`,
+      to: email,
+      subject,
+      text,
+      html: htmlContent || `<b>${text}</b>`,
+    });
+
+    console.log("Email sent:", info.messageId);
     return true;
   } catch (error) {
     console.error("Email send error:", error.message);
