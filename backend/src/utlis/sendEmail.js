@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
-
+import dotenv from 'dotenv';
+dotenv.config()
 export const sendEmail = async (email, subject, text, htmlContent = null) => {
   if (!process.env.EMAIL || !process.env.EMAIL_PASS) {
     console.error("Missing Email Credentials in .env file");
