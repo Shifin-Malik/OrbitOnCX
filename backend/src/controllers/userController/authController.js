@@ -602,7 +602,6 @@ export const refreshAccessToken = asyncHandler(async (req, res) => {
 
 export const googleAuth = asyncHandler(async (req, res) => {
   const { access_token } = req.body;
-  console.log(access_token)
   const deviceId = getDeviceId(req);
 
   if (!access_token || typeof access_token !== "string") {
