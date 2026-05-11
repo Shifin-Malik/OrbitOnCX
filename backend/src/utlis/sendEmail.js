@@ -1,27 +1,37 @@
 import nodemailer from "nodemailer";
-import dotenv from 'dotenv';
-dotenv.config()
-export const sendEmail = async (email, subject, text, htmlContent = null) => {
-  if (!process.env.EMAIL || !process.env.EMAIL_PASS) {
-    console.error("Missing Email Credentials in .env file");
+import dotenv from "dotenv";
+
+if (process.env.NODE_ENV !== "production") {
+  dotenv.config();
+}
+
+export const sendEmail = async (
+  email,
+  subject,
+  text,
+  htmlContent = null
+) => {
+  if (
+    !process.env.BREVO_SMTP_USER ||
+    !process.env.BREVO_SMTP_KEY ||
+    !process.env.BREVO_SENDER_EMAIL
+  ) {
+    console.error("Missing Brevo Credentials");
     return false;
   }
 
   const transporter = nodemailer.createTransport({
-    host: "smtp.gmail.com",
-    port: 587,            
-    secure: false,         
-    requireTLS: true,
-    family: 4,           
+    host: "smtp-relay.brevo.com",
+    port: 587,
+    secure: false,
     auth: {
-      user: process.env.EMAIL,
-      pass: process.env.EMAIL_PASS,
+      user: process.env.BREVO_SMTP_USER,
+      pass: process.env.BREVO_SMTP_KEY,
     },
-    connectionTimeout: 30000,
   });
 
   const mailOptions = {
-    from: `"OrbitonCX Support" <${process.env.EMAIL}>`,
+    from: `"OrbitOnCX Support" <${process.env.BREVO_SENDER_EMAIL}>`,
     to: email,
     subject,
     text,
@@ -30,10 +40,13 @@ export const sendEmail = async (email, subject, text, htmlContent = null) => {
 
   try {
     const info = await transporter.sendMail(mailOptions);
-    console.log(`Email sent to ${email}: ${info.messageId}`);
+
+    console.log("Email sent:", info.messageId);
+
     return true;
   } catch (error) {
-    console.error("Email send error:", error.message);
+    console.error("Email send error:", error);
+
     return false;
   }
 };
